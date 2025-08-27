@@ -1,4 +1,4 @@
-// newTodoType
+// newTodoType = todos
 export type NewTodoType = {
   id: string;
   title: string;
