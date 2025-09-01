@@ -1,6 +1,7 @@
 # full-calendar
 
 - https://fullcalendar.io/docs/getting-started
+- 가능하면 6.0 버전 쓰기
 
 ## 1. 설치
 
