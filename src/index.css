@@ -71,3 +71,13 @@ body {
   --primary: 62 100% 50%; /* 노랑 */
   --primary-fg: 0 0% 0%;
 }
+
+/* CSS */
+.sports-event {
+  background-color: #f08080 !important;
+  color: #fff !important;
+}
+.science-event {
+  background-color: #4682b4 !important;
+  color: #fff !important;
+}

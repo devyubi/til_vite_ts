@@ -6,6 +6,7 @@ import GoodsPage from './pages/GoodsPage';
 import HomePage from './pages/HomePage';
 import NotFound from './pages/NotFound';
 import WalletPage from './pages/WalletPage';
+import Calendar from './pages/Calendar';
 
 function App() {
   return (
@@ -65,7 +66,7 @@ function App() {
         <header className="bg-white shadow-md py-4 mb-8">
           <h1 className="text-center text-3xl font-bold text-gray-800">유비두비's 쇼핑몰</h1>
         </header>
-
+        <Calendar />
         {/* 컨텐츠 */}
         <ShopProvider>
           <div>
