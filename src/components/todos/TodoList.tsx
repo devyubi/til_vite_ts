@@ -1,4 +1,5 @@
 import { useTodos } from '../../contexts/TodoContext';
+import type { Todo } from '../../types/todoType';
 import TodoItem from './TodoItem';
 
 export type TodoListProps = {};
@@ -10,7 +11,7 @@ const TodoList = ({}: TodoListProps) => {
     <div>
       <h2>TodoList</h2>
       <ul>
-        {todos.map((item: any) => (
+        {todos.map((item: Todo) => (
           <TodoItem key={item.id} todo={item} />
         ))}
       </ul>

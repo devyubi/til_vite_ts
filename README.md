@@ -1,6 +1,13 @@
 # Supabase 프로젝트 연동
 
-- 테이블 생성은 생략함.
+- https://supabase.com/
+- `New organization` 으로 프로젝트 생성
+- `데이터베이스 비밀번호` 필수 보관 (.env)
+- 테이블 생성 ( Table Editor 또는 SQL Editor )
+- 기본형은 Table Editor 로 생성하고 추가적 설정 SQL Editor 활용
+- SQL 문 익숙해질 시 SQL Editor 관리 권장
+
+## 1. todos 테이블 생성 쿼리
 
 ```sql
 CREATE TABLE todos (
@@ -13,7 +20,7 @@ CREATE TABLE todos (
 );
 ```
 
-## 1. `.env` 파일 생성
+## 2. `.env` 파일 생성
 
 - 주의 사항 : .gitignore 꼭 확인 -> `.env` 없으면 꼭 추가해줘야함.
 
@@ -54,13 +61,17 @@ VITE_SUPABASE_URL=URL값
 VITE_SUPABASE_ANON_KEY=키값
 ```
 
-## 2. Supabase 클라이언트 라이브러리 설치
+- Supabase URL 과 Anon Key 파악하기
+  - Project 선택 후 `Project Overview` 에서 확인
+  - `Project API` 항목에서 파악 가능
+
+## 3. Supabase 클라이언트 라이브러리 설치
 
 ```bash
 npm install @supabase/supabase-js
 ```
 
-## 3. 폴더 및 파일 구조
+## 4. 폴더 및 파일 구조
 
 - /src/lib 폴더 생성
 - /src/lib/supabase.ts 파일 생성
@@ -69,20 +80,21 @@ npm install @supabase/supabase-js
 ```ts
 import { createClient } from '@supabase/supabase-js';
 
-// CRA 의 환경 변수 호출과는 형식이 다름. (meta)
+// CRA : process.env... 의 환경 변수 호출과는 형식이 다름. (meta)
+// Vite : import.meta.env... 환경 변수 호출
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
-
+// 웹브라우저 클라이언트 생성
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 ```
 
-## 4. ※ 중요 ※ Supabase 의 테이블의 컬럼의 데이터 타입 정의 ( js는 필요없지만 ts에선 필요함 )
+## 5. ※ 중요 ※ Supabase 의 테이블의 컬럼의 데이터 타입 정의 ( js는 필요없지만 ts에선 필요함 )
 
-### 4.1 데이터 타입 쉽게 추출하기
+### 5.1 데이터 타입 쉽게 추출하기
 
 ```bash
 npx supabase login
@@ -91,8 +103,11 @@ npx supabase login
 - 향후 지시대로 실행함
 - id 는 URL 의 앞쪽 단어가 ID가 됨
 
+  - id 는 supabase URL 의 앞 단어가 됨 ( rqckhcqnpwvkjofyetzm )
+  - VITE_SUPABASE_URL=https://`rqckhcqnpwvkjofyetzm`.supabase.co
+
 - 타입을 쉽게 만들어줌. package.json 해당 문구 추가
-  - `"generate-types": "npx supabase gen types typescript --project-id erontyifxxztudowhees --schema public > types_db.ts"`
+  - `"generate-types": "npx supabase gen types typescript --project-id 프로젝트 ID --schema 경로 > 파일명.ts"`
 
 ```
 "scripts": {
@@ -100,7 +115,7 @@ npx supabase login
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-types": "npx supabase gen types typescript --project-id erontyifxxztudowhees --schema public > types_db.ts"
+    "generate-types": "npx supabase gen types typescript --project-id rqckhcqnpwvkjofyetzm --schema public > types_db.ts"
   },
 ```
 
@@ -108,10 +123,99 @@ npx supabase login
 npm run generate-types
 ```
 
-## 5. CRUD 실행해 보기
+- 생성된 ts 의 내용을 참조하여 우리가 원하는 곳에 복사 및 붙여넣기 권장
+  - 권장사항 : /src/types/database.ts 생성 및 붙여넣기
+  - 편하게 활용하기 위한 처리
 
-### 5.1 CRUD 를 위한 폴더 및 파일 구조
+```ts
+// 해당 작업은 수작업 : 테이블명을 바꾸지 않는 이상 하단 타입은 변경되지 않음. (제너레이트란 명령을 주면 됨)
+// 해당 작업 이후 todoService.ts 가서 Promise<Todo[]> import해주기
+// // Todo 목록 조회
+// export const getTodos = async (): Promise<Todo[]> => {
+//   try {
+export type Todo = Database['public']['Tables']['todos']['Row'];
+export type TodoInsert = Database['public']['Tables']['todos']['Insert'];
+export type TodoUpdate = Database['public']['Tables']['todos']['Update'];
+```
+
+## 6. CRUD 실행해 보기
+
+### 6.1 CRUD 를 위한 폴더 및 파일 구조
 
 - `/src/apis 폴더` 생성 또는 `/src/services 폴더` 생성 ( 수업은 services 로 만듦 )
 - /src/services/todoServices.ts 파일 생성
 
+```ts
+import { supabase } from '../lib/supabase';
+import type { Todo, TodoInsert, TodoUpdate } from '../types/todoType';
+
+// 이것이 CRUD!!
+
+// Todo 목록 조회
+export const getTodos = async (): Promise<Todo[]> => {
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .order('created_at', { ascending: false });
+  // 실행은 되었지만, 결과가 오류이다.
+  if (error) {
+    throw new Error(`getTodos 오류 : ${error.message}`);
+  }
+  return data || [];
+};
+// Todo 생성
+export const createTodo = async (newTodo: TodoInsert): Promise<Todo | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('todos')
+      .insert([{ ...newTodo, completed: false }])
+      .select()
+      .single();
+    if (error) {
+      throw new Error(`createTodo 오류 : ${error.message}`);
+    }
+    return data;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+// Todo 수정
+export const updateTodo = async (id: number, editTitle: TodoUpdate): Promise<Todo | null> => {
+  try {
+    // 업데이트 구문 : const { data, error } = await supabase ~ .select();
+    const { data, error } = await supabase
+      .from('todos')
+      .update({ ...editTitle, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`updateTodo 오류 : ${error.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+// Todo 삭제
+export const deleteTodo = async (id: number): Promise<void> => {
+  try {
+    const { error } = await supabase.from('todos').delete().eq('id', id);
+    if (error) {
+      throw new Error(`deleteTodo 오류 : ${error.message}`);
+    }
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+// Complited 토글 = 어차피 toggle도 업데이트기 때문에 굳이 만들지 않아도 되지만 수업상 만듦
+
+export const toggleTodo = async (id: number, completed: boolean): Promise<Todo | null> => {
+  return updateTodo(id, { completed });
+};
+```
