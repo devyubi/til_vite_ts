@@ -1,6 +1,5 @@
-import React from 'react';
-import TodoWrite from './components/todos/TodoWrite';
 import TodoList from './components/todos/TodoList';
+import TodoWrite from './components/todos/TodoWrite';
 import { TodoProvider } from './contexts/TodoContext';
 
 function App() {
