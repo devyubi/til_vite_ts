@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Todo } from '../../types/todoType';
 import { useTodos } from '../../contexts/TodoContext';
-// 알리아스를 이용함   updateTodo as updateTodoService, toggleTodo as toggleTodoService, deleteTodo as deleteTodoService
+// 알리아스를 이용함 updateTodo as updateTodoService, toggleTodo as toggleTodoService, deleteTodo as deleteTodoService
 import {
   updateTodo as updateTodoService,
   toggleTodo as toggleTodoService,
@@ -52,7 +52,7 @@ const TodoItem = ({ todo }: TodoItemProps) => {
   };
 
   // 비동기 통신으로 toggle 업데이트
-  const handdleToggle = async (): Promise<void> => {
+  const handleToggle = async (): Promise<void> => {
     try {
       // DB 의 completed 가 업데이트가 되었다면, 성공 시 Todo 타입 리턴
       const result = await toggleTodoService(todo.id, !todo.completed);
@@ -92,7 +92,7 @@ const TodoItem = ({ todo }: TodoItemProps) => {
         </>
       ) : (
         <>
-          <input type="checkbox" checked={todo.completed} onChange={handdleToggle} />
+          <input type="checkbox" checked={todo.completed} onChange={handleToggle} />
           <span>{todo.title}</span>
           <button onClick={() => setIsEdit(true)}>수정</button>
           <button onClick={handleDelete}>삭제</button>
