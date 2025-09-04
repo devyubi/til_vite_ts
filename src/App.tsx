@@ -6,6 +6,7 @@ import SignUpPage from './pages/SignUpPage';
 import TodosPage from './pages/TodosPage';
 import Protected from './contexts/Protected';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProfilePage from './pages/ProfilePage';
 
 const TopBar = () => {
   const { signOut, user } = useAuth();
@@ -23,14 +24,9 @@ const TopBar = () => {
             할 일
           </Link>
         )}
-        {!user && (
-          <Link to="/signup" className="hover:text-blue-900 transition-colors">
-            회원가입
-          </Link>
-        )}
-        {!user && (
-          <Link to="/signin" className="hover:text-blue-900 transition-colors">
-            로그인
+        {user && (
+          <Link to="/profile" className="hover:text-blue-900 transition-colors">
+            내 프로필
           </Link>
         )}
         {user && <button onClick={signOut}>로그아웃</button>}
@@ -57,6 +53,14 @@ function App() {
               element={
                 <Protected>
                   <TodosPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <Protected>
+                  <ProfilePage />
                 </Protected>
               }
             />

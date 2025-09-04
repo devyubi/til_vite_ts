@@ -1,238 +1,433 @@
-# Supabase Auth
+# Supabase 인증 후 회원 추가 정보 받기
 
-- Auth : 인증
-- https://supabase.com/dashboard/project/rqckhcqnpwvkjofyetzm/editor/17327?schema=public
+- 회원가입 후에 `profiles 테이블` 에 추가 내용 받기
 
-## 1. Auth 메뉴 확인
+## 1. `profiles 테이블` 생성
 
-- 왼쪽 아이콘 중 `Authentication` 선택
+- SQL Editor 를 이용해서 진행함
 
-### 1.1 User Table 확인
+```sql
+-- 사용자 프로필 정보를 저장하는 테이블
+-- auth.users 테이블에 데이터가 추가되면 이와 연동하여 별도로 자동 추가
+create table profiles (
 
-- 회원에 대한 테이블명은 미리 생성이 되어있음
-- `Users` 라는 테이블이 이미 존재함
-- 회원가입을 하게 되면 `Users 테이블에 자동으로 추가`가 됨
+  -- id 컬럼은 pk
+  -- uuid 는 데이터 타입으로 중복 제거
+  -- references auth.users : 참조 테이블로 auth.users 를 참조함
+  -- on delete cascade : 사용자 계정을 삭제할 시 자동으로 profiles 도 같이 삭제 됨
+  id uuid references auth.users on delete cascade primary key,
 
-### 1.2 Sign In / Providers 메뉴
+  -- 추가 컬럼들 ( 닉네임, 아바타URL 등 )
+  nickname text,
+  -- avatar_url 은 사용자 이미지
+  -- supabase 의 storage 에 이미지 업로드 시 해당 이미지 URL : null 값임. ( 있으면 올리고 없으면 안올리고 )
+  avatar_url text,
+  -- created_at : 생성 날짜
+  -- timestamp with time zone : 시간대 정보를 포함한 시간
+  -- default now() : 기본 값으로 현재 시간을 저장하겠다
+  created_at timestamp with time zone default now()
+);
+```
 
-- Auth Providers : 회원가입할 수 있는 여러가지 항목을 미리 제공함
-- `Email 항목` 이 활성화 되어 있는지 확인
+## 2. 만약, 테이블이 추가, 컬럼 추가, 변경 등이 되었다면 ?
 
-### 1.3 Email 메뉴 확인
+- npm run generate-types 실행 해주기
 
-- SMTP ( Simple Mail Transfer Protocol ) : 인터넷에서 이메일을 보내고 받는 데 사용되는 통신 프로토콜
-  - 단순 메일 전송 프로토콜
-  - 예 ) http : HyperText Transfer Protocol
-  - 예) ftp : file Transfer Protocol
-- Supabase 에는 이메일 인증을 테스트만 제공함 ( 1시간에 3번만 사용 가능, 그래서 SMTP 서버 구축 필요 )
-- 추후 SMTP 서버 구축 또는 Google Service, `resend.com` 로 무료로 활용 가능
-  - resend.com 을 가장 많이 활용함, 혹은 구글/카카오 로그인 제일 많이 활용
-- Confirm signip 탭 : 회원가입 시 전달되는 인증메일 제목, 내용을 작성함
+```bash
+npm run generate-types
+```
 
-### 1.4 URL Configuration ※ 중요 ※
-
-- Site URL : http://localhost:3000 번에서 `http://localhost:5173` 로 변경함 ( 추후 Vercel 주소로 변경 예정 )
-- Redirect URLs : `http://localhost:5173`, `http://localhost:3000` 등으로 입력. ( 이것도 추후 Vercel 주소도 입력 )
-
-- 여기까지 Auth 환경설정 끝
-
----
-
-## 2. Auth 적용하기
-
-- /src/lib/supabase.ts
+- 실행 후 생성된 `/types_db.ts` 내용을 우리 type 파일에 추가함
 
 ```ts
-import { createClient } from '@supabase/supabase-js';
+// newTodoType = todos
+export type NewTodoType = {
+  id: string;
+  title: string;
+  completed: boolean;
+};
 
-// CRA 의 환경 변수 호출과는 형식이 다름. (meta)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// 해당 작업은 수작업 : 테이블명을 바꾸지 않는 이상 하단 타입은 변경되지 않음. (제너레이트란 명령을 주면 됨)
+// 해당 작업 이후 todoService.ts 가서 Promise<Todo[]> import해주기
+// // Todo 목록 조회
+// export const getTodos = async (): Promise<Todo[]> => {
+//   try {
+export type Todo = Database['public']['Tables']['todos']['Row'];
+export type TodoInsert = Database['public']['Tables']['todos']['Insert'];
+export type TodoUpdate = Database['public']['Tables']['todos']['Update'];
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+// 사용자 정보
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
+export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: '13.0.4';
+  };
+  public: {
+    Tables: {
+      memos: {
+        Row: {
+          created_at: string;
+          id: number;
+          memo: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: number;
+          memo?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: number;
+          memo?: string | null;
+        };
+        Relationships: [];
+      };
+      profiles: {
+        Row: {
+          avatar_url: string | null;
+          created_at: string | null;
+          id: string;
+          nickname: string | null;
+        };
+        Insert: {
+          avatar_url?: string | null;
+          created_at?: string | null;
+          id: string;
+          nickname?: string | null;
+        };
+        Update: {
+          avatar_url?: string | null;
+          created_at?: string | null;
+          id?: string;
+          nickname?: string | null;
+        };
+        Relationships: [];
+      };
+      todos: {
+        Row: {
+          completed: boolean;
+          content: string | null;
+          created_at: string | null;
+          id: number;
+          title: string;
+          updated_at: string | null;
+        };
+        Insert: {
+          completed?: boolean;
+          content?: string | null;
+          created_at?: string | null;
+          id?: number;
+          title: string;
+          updated_at?: string | null;
+        };
+        Update: {
+          completed?: boolean;
+          content?: string | null;
+          created_at?: string | null;
+          id?: number;
+          title?: string;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
+};
+
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>;
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, 'public'>];
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
 }
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
+      Row: infer R;
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
+    ? (DefaultSchema['Tables'] & DefaultSchema['Views'])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
+      }
+      ? R
+      : never
+    : never;
 
-// 회원 인증 Auth 기능 추가하기
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    // 웹브라우저에 탭이 열려 있는 동안 로그인 인증 토큰(글자) 자동 갱신
-    autoRefreshToken: true, // false 일 경우 자동으로 로그아웃이 됨
-    // 사용자 세션 정보를 localStorage 에 저장해서 웹브라우저 새로고침 시에도 로그인 유지
-    persistSession: true,
-    // URL 인증 세션을 파악해서 Auth 로그인 등의 콜백을 처리한다
-    detectSessionInUrl: true,
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema['Tables']
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
+      Insert: infer I;
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
+    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I;
+      }
+      ? I
+      : never
+    : never;
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema['Tables']
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
+      Update: infer U;
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
+    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U;
+      }
+      ? U
+      : never
+    : never;
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema['Enums']
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
+    ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
+    : never;
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema['CompositeTypes']
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
+    ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
+    : never;
+
+export const Constants = {
+  public: {
+    Enums: {},
   },
-});
+} as const;
 ```
 
-## 3. Auth 인증 정보 관리 ( 전역에서 Session 관리 )
+## 3. 프로필 CRUD 를 위한 파일 구성
 
-- /src/Contexts/AuthContext.tsx
+- `src/lib/profile.ts` 파일 생성
 
-```tsx
+```ts
 /**
- * 주요 기능
- * - 사용자 세션관리
- * - 로그인, 회원가입, 로그아웃
- * - 사용자 인증 정보 상태 변경 감시
- * - 전역 인증 상태를 컴포넌트에 반영
+ * 사용자 프로필 관리 ( profiles.ts 에서 관리 )
+ * - 프로필 생성
+ * - 프로필 정보 조회
+ * - 프로필 정보 수정
+ * - 프로필 정보 삭제
+ *
+ * 주의 사항
+ * - 반드시 사용자 인증 후에만 프로필 생성
  */
 
-import type { Session, User } from '@supabase/supabase-js';
-import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
-import { supabase } from '../lib/supabase';
+import type { ProfileInsert } from '../types/todoType';
+import { supabase } from './supabase';
 
-// 1. 인증 Context Type
-type AuthContextType = {
-  // 현재 사용자의 세션 정보 ( 로그인 상태, 토큰 )
-  session: Session | null;
-  // 현재 로그인 된 사용자 정보
-  user: User | null;
-  // 회원 가입 함수 - 개발자가 직접 수기 작성 ( 사용자의 이메일, 비밀번호를 받음 ) : 비동기라서 Promise 로 들어옴
-  signUp: (email: string, password: string) => Promise<{ error?: string }>;
-  // 회원 로그인 함수 - 개발자가 직접 수기 작성 ( 사용자의 이메일, 비밀번호를 받음 ) : 비동기라서 Promise 로 들어옴
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  // 회원 로그아웃
-  signOut: () => Promise<void>;
-};
-
-// 2. 인증 Context 생성 ( 인증 기능을 Children들 Component 에서 활용하게 해줌 )
-const AuthContext = createContext<AuthContextType | null>(null);
-
-// 3. 인증 Context Provider
-export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
-  // 현재 사용자 세션
-  const [session, setSession] = useState<Session | null>(null);
-  // 현재 로그인한 사용자 정보
-  const [user, setUser] = useState<User | null>(null);
-
-  // 실행이 되자마자 ( 초기 세션 ) 로드 및 인증 상태 변경 감시 ( 새로고침을 하던 뭘 하던 바로 작동되게끔 )
-  useEffect(() => {
-    // 기존 세션이 있는지 확인
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ? data.session : null);
-      setUser(data.session?.user ?? null);
-    });
-    // 인증상태 변경 이벤트를 체크함 ( 로그인, 로그아웃 , 토큰 갱신 등의 이벤트 실시간 감시 )
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-    });
-    // Component 가 제거 되면, 이벤트 체크 해제함 : cleanUp ( return () => {} << 이렇게 생김 )
-    return () => {
-      // 이벤트 감시 해제
-      data.subscription.unsubscribe();
-    };
-  }, []);
-
-  // 회원 가입 (이메일, 비밀번호)
-  const signUp: AuthContextType['signUp'] = async (email, password) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        // 회원 가입 후 이메일로 인증 확인 시 리다이렉트 될 URL
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+// 사용자 프로필 생성
+const createProfile = async (newUserProfile: ProfileInsert): Promise<boolean> => {
+  try {
+    const { error } = await supabase.from('profiles').insert([{ ...newUserProfile }]);
     if (error) {
-      return { error: error.message };
+      console.log(`프로필 추가에 실패하였습니다 : ${error.message}`);
+      return false;
     }
-    // 우리는 이메일 확인을 활성화 시켰음
-    // 이메일 확인 후 인증 전까지는 아무것도 넘어오지 않음
-    return {};
-  };
-
-  // 회원 로그인 (이메일, 비밀번호)
-  const signIn: AuthContextType['signIn'] = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password, options: {} });
-    if (error) {
-      return { error: error.message };
-    }
-    return {};
-  };
-  // 회원 로그아웃
-  const signOut: AuthContextType['signOut'] = async () => {
-    await supabase.auth.signOut();
-  };
-
-  return (
-    <AuthContext.Provider value={{ signUp, signOut, signIn, user, session }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-// const {signUp, signIn, signOut, user, session} = useAuth()
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('AuthContext 가 없습니다.');
+    return true;
+  } catch (error) {
+    console.log(`프로필 생성 오류 : ${error}`);
+    return false;
   }
-  return ctx;
 };
+
+// 사용자 프로필 조회
+const getProfile = () => {};
+
+// 사용자 프로필 수정
+const updateProfile = () => {};
+
+// 사용자 프로필 삭제
+const deleteProfile = () => {};
+
+// 사용자 프로필 이미지 업로드
+const uploadAvatar = () => {};
+
+// 내보내기 ( 하나하나 export 넣기 귀찮을 시 )
+export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar };
 ```
 
-- App.tsx
+## 4. 회원 가입 시 추가 정보 내용 구성
 
-```tsx
-import TodoList from './components/todos/TodoList';
-import TodoWrite from './components/todos/TodoWrite';
-import { AuthProvider } from './contexts/AuthContext';
-import { TodoProvider } from './contexts/TodoContext';
-
-function App() {
-  return (
-    <AuthProvider>
-      <div>
-        <h1>Todo Service</h1>
-        <TodoProvider>
-          <TodoWrite />
-          <TodoList />
-        </TodoProvider>
-      </div>
-    </AuthProvider>
-  );
-}
-
-export default App;
-```
-
-## 4. 회원 가입 폼 만들기
-
-- /src/pages/SignUpPage.tsx 파일 생성
+- id(uuid), nickname (null도 가능하긴 함), avata_url(null), create_at (자동으로 들어감)
+- /src/pages/SignUpPage.tsx 추가 수정
 
 ```tsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { createProfile } from '../lib/profile';
+import type { ProfileInsert } from '../types/todoType';
 
 function SignUpPage() {
   const { signUp } = useAuth();
 
   const [email, setEmail] = useState<string>('');
   const [pw, setPw] = useState<string>('');
+
+  // 추가 정보 ( 닉네임 )
+  const [nickName, setNickName] = useState<string>('');
   const [msg, setMsg] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); // 해당 코드 필수 : 웹브라우저 갱신 막아주기
+    // 유효성 검사
+    if (!email.trim()) {
+      alert('이메일을 입력하세요.');
+      return;
+    }
 
-    // 회원 가입 하기
-    const { error } = await signUp(email, pw);
+    if (!pw.trim()) {
+      alert('비밀번호를 입력하세요.');
+      return;
+    }
+    if (pw.length < 6) {
+      alert('비밀번호는 최소 6자 이상입니다.');
+      return;
+    }
+
+    if (!nickName.trim()) {
+      alert('닉네임을 입력하세요.');
+      return;
+    }
+
+    // 회원 가입 및 추가 정보 입력하기
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password: pw,
+      options: {
+        // 회원 가입 후 이메일로 인증 확인시 리다이렉트 될 URL
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
     if (error) {
       setMsg(`회원가입 오류 : ${error}`);
     } else {
-      setMsg(`이메일이 발송 되었습니다. 이메일을 확인 해주세요.`);
+      // 회원가입이 성공했으므로 profiles 도 채워줌
+      if (data?.user?.id) {
+        // 프로필을 추가함
+        const newUser: ProfileInsert = { id: data.user.id, nickname: nickName };
+        const result = await createProfile(newUser);
+        if (result) {
+          // 프로필 추가가 성공한 경우
+          setMsg(`회원 가입 및 프로필 생성 성공. 이메일을 확인 해주세요.`);
+        } else {
+          // 프로필 추가를 실패한 경우
+          setMsg(`회원가입은 성공하였으나, 프로필 생성에 실패하였습니다.`);
+        }
+      } else {
+        setMsg(`이메일이 발송 되었습니다. 이메일을 확인 해주세요.`);
+      }
     }
   };
+
   return (
     <div>
       <h2>Todo Service 회원 가입</h2>
       <div className="border">
         <form onSubmit={handleSubmit}>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <br />
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="이메일"
+          />
+          <br />
+          <br />
           {/* <button type="button">이메일 중복 확인</button> */}
-          <input type="password" value={pw} onChange={e => setPw(e.target.value)} />
+          <input
+            type="password"
+            value={pw}
+            onChange={e => setPw(e.target.value)}
+            placeholder="비밀번호"
+          />
+          <input
+            type="text"
+            value={nickName}
+            onChange={e => setNickName(e.target.value)}
+            placeholder="닉네임"
+          />
+          <br />
           {/* form 안에선 button type 지정해주기 */}
           <button type="submit">회원가입</button>
         </form>
@@ -245,225 +440,295 @@ function SignUpPage() {
 export default SignUpPage;
 ```
 
-## 5. 로그인 폼 만들기
+## 5. 사용자 프로필 CRUD 기능 추가
 
-- /src/pages/SignInPage.tsx
+- /src/lib/profile.ts 내용 추가
 
 ```tsx
-import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+/**
+ * 사용자 프로필 관리 ( profiles.ts 에서 관리 )
+ * - 프로필 생성
+ * - 프로필 정보 조회
+ * - 프로필 정보 수정
+ * - 프로필 정보 삭제
+ *
+ * 주의 사항
+ * - 반드시 사용자 인증 후에만 프로필 생성
+ */
 
-function SignInPage() {
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState<string>('');
-  const [pw, setPw] = useState<string>('');
-  const [msg, setMsg] = useState<string>('');
+import type { Profile, ProfileInsert, ProfileUpdate } from '../types/todoType';
+import { supabase } from './supabase';
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // 해당 코드 필수 : 웹브라우저 갱신 막아주기
-
-    const { error } = await signIn(email, pw);
+// 사용자 프로필 생성
+const createProfile = async (newUserProfile: ProfileInsert): Promise<boolean> => {
+  try {
+    const { error } = await supabase.from('profiles').insert([{ ...newUserProfile }]);
     if (error) {
-      setMsg(`로그인 오류 : ${error}`);
-    } else {
-      setMsg(`로그인이 성공하였습니다.`);
+      console.log(`프로필 추가에 실패하였습니다 : ${error.message}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.log(`프로필 생성 오류 : ${error}`);
+    return false;
+  }
+};
+
+// 사용자 프로필 조회
+const getProfile = async (userId: string): Promise<Profile | null> => {
+  try {
+    const { error, data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (error) {
+      console.log(error.message);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+// 사용자 프로필 수정
+const updateProfile = async (editUserProfile: ProfileUpdate, userId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ...editUserProfile })
+      .eq('id', userId);
+    if (error) {
+      console.log(error.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// 사용자 프로필 삭제
+const deleteProfile = async (): Promise<any> => {};
+
+// 사용자 프로필 이미지 업로드
+const uploadAvatar = async (): Promise<any> => {};
+
+// 내보내기 ( 하나하나 export 넣기 귀찮을 시 )
+export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar };
+```
+
+## 6. 사용자 프로필 출력 페이지
+
+- /src/pages/ProfilePage.tsx 파일 생성
+
+```tsx
+/**
+ * 사용자 프로필 페이지
+ * - 기본 정보 표시
+ * - 정보 수정
+ * - 회원 탈퇴 기능 : 반드시 확인을 거치고 진행해야함
+ */
+
+import { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getProfile, updateProfile } from '../lib/profile';
+import type { Profile, ProfileUpdate } from '../types/todoType';
+
+function ProfilePage() {
+  // 회원 기본 정보
+  const { user } = useAuth();
+  // 데이터 가져오는 동안의 로딩
+  const [loading, setLoading] = useState<boolean>(true);
+  // 사용자 프로필
+  const [profileData, setProfileData] = useState<Profile | null>(null);
+  // Error 메세지
+  const [error, setError] = useState<string>('');
+  // 회원 정보 수정
+  const [userEdit, setUserEdit] = useState<boolean>(false);
+  // 회원 닉네임 보관
+  const [nickName, setNickName] = useState<string>('');
+
+  // 사용자 프로필 정보 가져오기
+  const loadProfile = async () => {
+    if (!user?.id) {
+      // 사용자의 id 가 없으면 중지
+      setError('사용자의 정보를 찾을 수 없습니다.');
+      setLoading(false);
+      return;
+    }
+    try {
+      // 사용자 정보를 가져오기 ( null 일 수도 있음 )
+      const tempData = await getProfile(user?.id);
+      if (!tempData) {
+        // null 일 경우
+        setError('사용자의 프로필 정보를 찾을 수 없습니다.');
+        return;
+      }
+
+      // 사용자 정보가 있을 경우
+      setNickName(tempData.nickname || '');
+      setProfileData(tempData);
+    } catch (error) {
+      console.log(error);
+      setError('사용자의 프로필 정보 호출 오류');
+    } finally {
+      setLoading(false);
     }
   };
-  return (
-    <div>
-      <h2>로그인</h2>
-      <div>
-        <form onSubmit={handleSubmit}>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
-          <input type="password" value={pw} onChange={e => setPw(e.target.value)} />
-          <button type="submit">로그인</button>
-        </form>
-        <p>{msg}</p>
-      </div>
-    </div>
-  );
-}
 
-export default SignInPage;
-```
+  // 프로필 데이터 업데이트
+  const saveProfile = async () => {
+    if (!user) {
+      return;
+    }
+    if (!profileData) {
+      return;
+    }
 
-## 6. TodoPage 생성
+    try {
+      const tempUpdateData: ProfileUpdate = { nickname: nickName };
+      const success = await updateProfile(tempUpdateData, user.id);
+      if (!success) {
+        console.log('프로필 업데이트에 실패하였습니다.');
+        return;
+      }
 
-- 목적 : 인증이 안된 사용자는 할 일 작성 못하게끔 만드려고함.
-- /src/pages/TodosPage.tsx 파일 생성
+      loadProfile();
+    } catch (err) {
+      console.log('프로필 업데이트 오류', err);
+    } finally {
+      setUserEdit(false);
+    }
+  };
 
-```tsx
-import TodoList from '../components/todos/TodoList';
-import TodoWrite from '../components/todos/TodoWrite';
-import { TodoProvider } from '../contexts/TodoContext';
-
-function TodosPage() {
-  return (
-    <div>
-      <h2>할 일</h2>
-      <TodoProvider>
-        <div>
-          <TodoWrite />
-        </div>
-        <div>
-          <TodoList />
-        </div>
-      </TodoProvider>
-    </div>
-  );
-}
-
-export default TodosPage;
-```
-
-## 7. 인증 페이지
-
-- /src/pages/AuthCallback.tsx
-
-```tsx
-import React, { useEffect, useState } from 'react';
-
-/**
- * - 인증 콜백 URL 처리
- * - 사용자에게 인증 진행 상태 안내
- * - 자동 인증 처리 완료 안내
- */
-
-function AuthCallback() {
-  const [msg, setMsg] = useState<string>('인증 처리 중 ...');
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setMsg('이메일 인증 완료. 홈으로 이동해주세요');
-    }, 1500);
-
-    // 클린업 함수
-    return () => {
-      clearTimeout(timer);
-    };
+    loadProfile();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-[999] w-full h-full bg-green-600 flex items-center justify-center">
+        <h1 className="text-white text-xl font-bold">프로필 로딩중 ...</h1>
+      </div>
+    );
+  }
+  // error 메세지 출력하기
+  if (error) {
+    return (
+      <div>
+        <h2>프로필</h2>
+        <div>{error}</div>
+        <button onClick={loadProfile}>재시도</button>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <h2>인증 페이지</h2>
-      <div>{msg}</div>
+    <div className="p-6 max-w-2xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6">회원 정보</h2>
+      {/* 사용자 기본 정보 */}
+      <div className="mb-6 p-4 border rounded-lg shadow-sm bg-white">
+        <h3 className="text-xl font-semibold mb-2">기본 정보</h3>
+        <div className="text-gray-700">이메일 : {user?.email}</div>
+        <div className="text-gray-700">
+          가입일: {user?.created_at && new Date(user.created_at).toLocaleString()}
+        </div>
+      </div>
+      {/* 사용자 추가 정보 */}
+      <div className="p-4 border rounded-lg shadow-sm bg-white">
+        <h3 className="text-xl font-semibold mb-2">사용자 추가 정보</h3>
+        <div className="text-gray-700">아이디 : {profileData?.id}</div>
+        {userEdit ? (
+          <>
+            <div>
+              닉네임 :
+              <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} />
+            </div>
+            <div className="text-gray-700">
+              아바타 :
+              {profileData?.avatar_url ? (
+                <img src={profileData.avatar_url} />
+              ) : (
+                <button className="border px-1">파일 추가</button>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-gray-700">닉네임 : {profileData?.nickname}</div>
+            <div className="text-gray-700">
+              아바타 :
+              {profileData?.avatar_url ? (
+                <img src={profileData.avatar_url} />
+              ) : (
+                <img
+                  className="h-[30px] w-[35px]"
+                  src={
+                    'https://e7.pngegg.com/pngimages/867/694/png-clipart-user-profile-default-computer-icons-network-video-recorder-avatar-cartoon-maker-blue-text.png'
+                  }
+                />
+              )}
+            </div>
+          </>
+        )}
+        <div className="text-gray-700">
+          아바타 :
+          {profileData?.avatar_url ? (
+            <img src={profileData.avatar_url} />
+          ) : (
+            <button className="border px-1">파일 추가</button>
+          )}
+        </div>
+        <div className="text-gray-700">
+          가입일 :{profileData?.created_at && new Date(profileData.created_at).toLocaleString()}
+        </div>
+      </div>
+      {error && (
+        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
+      <div>
+        {userEdit ? (
+          <>
+            <button onClick={saveProfile}>수정 확인</button>
+            <button
+              onClick={() => {
+                setUserEdit(false);
+                setNickName(profileData?.nickname || '');
+              }}
+            >
+              수정 취소
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setUserEdit(true)}>정보 수정</button>
+            <button>회원 탈퇴</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-export default AuthCallback;
+export default ProfilePage;
 ```
 
-## 8. Router 구성하기 ( 메뉴 구성하기 )
+## 7. Router 세팅
 
 - App.tsx
 
 ```tsx
 import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import AuthCallbackPage from './pages/AuthCallbackPage';
-import HomePage from './pages/HomePage';
-import SignInPage from './pages/SignInPage';
-import SignUpPage from './pages/SignUpPage';
-import TodosPage from './pages/TodosPage';
-
-const TopBar = () => {
-  const { signOut, user } = useAuth();
-  return (
-    <nav className="bg-blue-400 text-white px-6 py-4 flex justify-between items-center">
-      {/* 로고 또는 홈 */}
-      <Link to="/" className="text-lg font-bold hover:text-yellow-300 transition-colors">
-        홈
-      </Link>
-
-      {/* 메뉴 링크 */}
-      <div className="flex space-x-4">
-        {user && (
-          <Link to="/todos" className="hover:text-yellow-300 transition-colors">
-            할 일
-          </Link>
-        )}
-        {!user && (
-          <Link to="/signup" className="hover:text-yellow-300 transition-colors">
-            회원가입
-          </Link>
-        )}
-        {!user && (
-          <Link to="/signin" className="hover:text-yellow-300 transition-colors">
-            로그인
-          </Link>
-        )}
-        {user && <button onClick={signOut}>로그아웃</button>}
-      </div>
-    </nav>
-  );
-};
-
-function App() {
-  return (
-    <AuthProvider>
-      <div>
-        <h1>Todo Service</h1>
-        <Router>
-          <TopBar />
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/signup" element={<SignUpPage />} />
-            <Route path="/signin" element={<SignInPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="/todos" element={<TodosPage />} />
-          </Routes>
-        </Router>
-      </div>
-    </AuthProvider>
-  );
-}
-
-export default App;
-```
-
-## 9. 인증 ( Auth ) 에 따라서 라우터 처리하기
-
-- 인증된 사용자 ( 로그인 사용자 허가 ) 페이지 처리하기
-- /src/components/Protected.tsx 파일 생성
-
-```tsx
-/**
- * 로그인 한 사용자가 접근 할 수 있는 페이지 :
- * - 사용자 프로필 페이지
- * - 관리자 대시보드 페이지
- * - 개인 설정 페이지
- * - 구매 내역 페이지 등등
- */
-
-import type { PropsWithChildren } from 'react';
-import { useAuth } from './AuthContext';
-import { Navigate } from 'react-router-dom';
-
-const Protected: React.FC<PropsWithChildren> = ({ children }) => {
-  const { user } = useAuth();
-  // 로그인하지 않은 사용자는 로그인 페이지로 강제 이동, 로그인 한 사용자는 return <div>{children}</div>;
-  if (!user) {
-    return <Navigate to={'/signin'} replace />;
-  }
-  return <div>{children}</div>;
-};
-
-export default Protected;
-```
-
-## 10. App.tsx 에 Protected 사용하기
-
-- App.tsx
-
-```tsx
-import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import HomePage from './pages/HomePage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 import TodosPage from './pages/TodosPage';
 import Protected from './contexts/Protected';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProfilePage from './pages/ProfilePage';
 
 const TopBar = () => {
   const { signOut, user } = useAuth();
@@ -481,14 +746,9 @@ const TopBar = () => {
             할 일
           </Link>
         )}
-        {!user && (
-          <Link to="/signup" className="hover:text-blue-900 transition-colors">
-            회원가입
-          </Link>
-        )}
-        {!user && (
-          <Link to="/signin" className="hover:text-blue-900 transition-colors">
-            로그인
+        {user && (
+          <Link to="/profile" className="hover:text-blue-900 transition-colors">
+            내 프로필
           </Link>
         )}
         {user && <button onClick={signOut}>로그아웃</button>}
@@ -518,6 +778,14 @@ function App() {
                 </Protected>
               }
             />
+            <Route
+              path="/profile"
+              element={
+                <Protected>
+                  <ProfilePage />
+                </Protected>
+              }
+            />
           </Routes>
         </Router>
       </div>
@@ -526,180 +794,4 @@ function App() {
 }
 
 export default App;
-```
-
-## 11. 새로 고침을 하거나, 직접 주소를 입력 할 경우에도 사용자 정보 유지하기
-
-- 유지는 되고 있으나, React 에서 처리 순서가 늦음
-- AuthContext 에 loadding 이라는 처리를 진행해 주고, 활용함
-- AuthContext.tsx
-
-```tsx
-/**
- * 주요 기능
- * - 사용자 세션관리
- * - 로그인, 회원가입, 로그아웃
- * - 사용자 인증 정보 상태 변경 감시
- * - 전역 인증 상태를 컴포넌트에 반영
- */
-
-import type { Session, User } from '@supabase/supabase-js';
-import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
-import { supabase } from '../lib/supabase';
-
-// 1. 인증 Context Type
-type AuthContextType = {
-  // 현재 사용자의 세션 정보 ( 로그인 상태, 토큰 )
-  session: Session | null;
-  // 현재 로그인 된 사용자 정보
-  user: User | null;
-  // 회원 가입 함수 - 개발자가 직접 수기 작성 ( 사용자의 이메일, 비밀번호를 받음 ) : 비동기라서 Promise 로 들어옴
-  signUp: (email: string, password: string) => Promise<{ error?: string }>;
-  // 회원 로그인 함수 - 개발자가 직접 수기 작성 ( 사용자의 이메일, 비밀번호를 받음 ) : 비동기라서 Promise 로 들어옴
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  // 회원 로그아웃
-  signOut: () => Promise<void>;
-  // 회원 정보 로딩 상태
-  loading: boolean;
-};
-
-// 2. 인증 Context 생성 ( 인증 기능을 Children들 Component 에서 활용하게 해줌 )
-const AuthContext = createContext<AuthContextType | null>(null);
-
-// 3. 인증 Context Provider
-export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
-  // 현재 사용자 세션
-  const [session, setSession] = useState<Session | null>(null);
-  // 현재 로그인한 사용자 정보
-  const [user, setUser] = useState<User | null>(null);
-  // 로딩 상태 추가 : 초기 실행시 loading 시킴, true
-  const [loading, setLoading] = useState<boolean>(true);
-
-  // 실행이 되자마자 ( 초기 세션 ) 로드 및 인증 상태 변경 감시 ( 새로고침을 하던 뭘 하던 바로 작동되게끔 )
-  useEffect(() => {
-    // 세션을 초기에 로딩을 한 후 처리함
-    const loadSession = async () => {
-      try {
-        setLoading(true); // 로딩중. 해당 코드는 굳이 안적어도 됨
-
-        const { data } = await supabase.auth.getSession();
-        setSession(data.session ? data.session : null);
-        setUser(data.session?.user ?? null);
-      } catch (error) {
-        console.log(error);
-      } finally {
-        // finally : 성공해도 실행, 실패해도 실행 ( 과정이 끝나면 무조건 로딩완료함 )
-        setLoading(false);
-      }
-    };
-    loadSession();
-
-    // // 기존 세션이 있는지 확인
-    // supabase.auth.getSession().then(({ data }) => {
-    //   setSession(data.session ? data.session : null);
-    //   setUser(data.session?.user ?? null);
-    // });
-
-    // 인증상태 변경 이벤트를 체크함 ( 로그인, 로그아웃 , 토큰 갱신 등의 이벤트 실시간 감시 )
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-    });
-    // Component 가 제거 되면, 이벤트 체크 해제함 : cleanUp ( return () => {} << 이렇게 생김 )
-    return () => {
-      // 이벤트 감시 해제
-      data.subscription.unsubscribe();
-    };
-  }, []);
-
-  // 회원 가입 (이메일, 비밀번호)
-  const signUp: AuthContextType['signUp'] = async (email, password) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        // 회원 가입 후 이메일로 인증 확인 시 리다이렉트 될 URL
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      return { error: error.message };
-    }
-    // 우리는 이메일 확인을 활성화 시켰음
-    // 이메일 확인 후 인증 전까지는 아무것도 넘어오지 않음
-    return {};
-  };
-
-  // 회원 로그인 (이메일, 비밀번호)
-  const signIn: AuthContextType['signIn'] = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password, options: {} });
-    if (error) {
-      return { error: error.message };
-    }
-    return {};
-  };
-  // 회원 로그아웃
-  const signOut: AuthContextType['signOut'] = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const value: AuthContextType = { signUp, signOut, signIn, user, session, loading };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// const {signUp, signIn, signOut, user, session} = useAuth()
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-};
-```
-
-## 12. Protected 에 loading 값 활용하기
-
-- Auth 인증 후 `새로고침` 또는 `주소 직접 입력` 시 `인증 상태를 읽기 위한 시간 확보`
-- AuthContext.tsx 에서 읽어 들일 때 까지 Loading 을 활성화 함
-
-```tsx
-/**
- * 로그인 한 사용자가 접근 할 수 있는 페이지 :
- * - 사용자 프로필 페이지
- * - 관리자 대시보드 페이지
- * - 개인 설정 페이지
- * - 구매 내역 페이지 등등
- */
-
-import type { PropsWithChildren } from 'react';
-import { useAuth } from './AuthContext';
-import { Navigate } from 'react-router-dom';
-
-const Protected: React.FC<PropsWithChildren> = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    // 사용자 정보가 로딩중이라면 ?
-    return (
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          background: 'rgba(0,0,0,0.7)',
-          zIndex: 999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      ></div>
-    );
-  }
-
-  // 로그인하지 않은 사용자는 로그인 페이지로 강제 이동, 로그인 한 사용자는 return <div>{children}</div>;
-  if (!user) {
-    return <Navigate to={'/signin'} replace />;
-  }
-  return <div>{children}</div>;
-};
-
-export default Protected;
 ```
