@@ -68,37 +68,51 @@ function SignUpPage() {
   };
 
   return (
-    <div>
-      <h2>Todo Service 회원 가입</h2>
-      <div className="border">
-        <form onSubmit={handleSubmit}>
-          <br />
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="이메일"
-          />
-          <br />
-          <br />
-          {/* <button type="button">이메일 중복 확인</button> */}
-          <input
-            type="password"
-            value={pw}
-            onChange={e => setPw(e.target.value)}
-            placeholder="비밀번호"
-          />
-          <input
-            type="text"
-            value={nickName}
-            onChange={e => setNickName(e.target.value)}
-            placeholder="닉네임"
-          />
-          <br />
-          {/* form 안에선 button type 지정해주기 */}
-          <button type="submit">회원가입</button>
-        </form>
-        <p>{msg}</p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <div className="bg-white w-full max-w-md p-8 rounded-xl shadow-lg">
+        <h2 className="text-2xl font-bold text-center text-blue-600 mb-6">
+          Todo Service 회원 가입
+        </h2>
+        <div className="border rounded-lg p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="이메일"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            {/* <button type="button">이메일 중복 확인</button> */}
+            <input
+              type="password"
+              value={pw}
+              onChange={e => setPw(e.target.value)}
+              placeholder="비밀번호"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <input
+              type="text"
+              value={nickName}
+              onChange={e => setNickName(e.target.value)}
+              placeholder="닉네임"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            {/* form 안에선 button type 지정해주기 */}
+            <button
+              type="submit"
+              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+            >
+              회원가입
+            </button>
+          </form>
+          <p
+            className={`mt-4 text-sm text-center ${
+              msg.includes('성공') ? 'text-green-600' : 'text-red-500'
+            }`}
+          >
+            {msg}
+          </p>
+        </div>
       </div>
     </div>
   );

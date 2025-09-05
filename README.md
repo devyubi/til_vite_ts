@@ -1,525 +1,591 @@
-# Supabase 인증 후 회원 추가 정보 받기
+# Supabase 회원 탈퇴
 
-- 회원가입 후에 `profiles 테이블` 에 추가 내용 받기
+- 기본 제공되는 탈퇴 기능
+  - `supabase.auth.admin.deleteUser()`
+  - 관리자 전용 ( 서버에서만 실행됨 )
+  - react 는 클라이언트 즉, 웬브라우저 전용이라서 실행 불가
+  - 보안상 위험 : 실수로 지울 가능성
+  - 복구 불가
+- 탈퇴 기능
+  - 사용자 비활성
+  - 30일 후 삭제가 일반적으로 진행됨
 
-## 1. `profiles 테이블` 생성
+## 1. React 에서는 관리자가 수작업으로 삭제
 
-- SQL Editor 를 이용해서 진행함
+- profiles 및 사용자가 등록한 테이블에서 제거 진행
+- 사용자 삭제 수작업 실행
+- `탈퇴 신청한 사용자 목록을 관리할 테이블`이 필요함
+
+## 2. DB 테이블 생성 및 업데이트 진행
+
+- 탈퇴 신청 사용자 테이블 ( SQL Editor )
 
 ```sql
--- 사용자 프로필 정보를 저장하는 테이블
--- auth.users 테이블에 데이터가 추가되면 이와 연동하여 별도로 자동 추가
-create table profiles (
-
-  -- id 컬럼은 pk
-  -- uuid 는 데이터 타입으로 중복 제거
-  -- references auth.users : 참조 테이블로 auth.users 를 참조함
-  -- on delete cascade : 사용자 계정을 삭제할 시 자동으로 profiles 도 같이 삭제 됨
-  id uuid references auth.users on delete cascade primary key,
-
-  -- 추가 컬럼들 ( 닉네임, 아바타URL 등 )
-  nickname text,
-  -- avatar_url 은 사용자 이미지
-  -- supabase 의 storage 에 이미지 업로드 시 해당 이미지 URL : null 값임. ( 있으면 올리고 없으면 안올리고 )
-  avatar_url text,
-  -- created_at : 생성 날짜
-  -- timestamp with time zone : 시간대 정보를 포함한 시간
-  -- default now() : 기본 값으로 현재 시간을 저장하겠다
-  created_at timestamp with time zone default now()
+-- 탈퇴 신청한 사용자 목록 테이블
+CREATE TABLE account_deletion_requests (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY, -- PK, 중복이 되지 않는 ID 생성 ( DEFAULT gen_random_uuid() )
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- auth.users(id) 가 삭제 되면, 같이 삭제해줌 ( 관리자가 수작업으로 삭제하면 같이 삭제됨 )
+  user_email TEXT NOT NULL, -- 탈퇴 신청자의 email 을 담아둠
+  requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- 신청한 날짜
+  reason TEXT, -- 사유
+  -- status : 현재 탈퇴 신청 진행 상태
+  -- 기본은 Pending (default값으로) : 처리중
+  -- 탈퇴 승인 approved : 승인
+  -- 탈퇴 거부 rejected : 거절
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  admin_notes TEXT,  -- 관리자가 메세지를 남겨서 승인 / 거절 사유 등을 기록함
+  processed_at TIMESTAMP WITH TIME ZONE, -- 요청을 처리한 시간
+  processed_by UUID REFERENCES auth.users(id) -- 요청을 처리한 관리자 ID
 );
 ```
 
-## 2. 만약, 테이블이 추가, 컬럼 추가, 변경 등이 되었다면 ?
-
-- npm run generate-types 실행 해주기
-
-```bash
-npm run generate-types
+```sql
+-- Supabase Dashboard에서 실행
+CREATE TABLE account_deletion_requests (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_email TEXT NOT NULL,
+  requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  reason TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  admin_notes TEXT,
+  processed_at TIMESTAMP WITH TIME ZONE,
+  processed_by UUID REFERENCES auth.users(id)
+);
 ```
 
-- 실행 후 생성된 `/types_db.ts` 내용을 우리 type 파일에 추가함
+## 3. dummy 회원 가입 시키기
 
-```ts
-// newTodoType = todos
-export type NewTodoType = {
-  id: string;
-  title: string;
-  completed: boolean;
-};
+- https://tmailor.com/ko/
+- 5명 정도 가입 시켜봄
 
-// 해당 작업은 수작업 : 테이블명을 바꾸지 않는 이상 하단 타입은 변경되지 않음. (제너레이트란 명령을 주면 됨)
-// 해당 작업 이후 todoService.ts 가서 Promise<Todo[]> import해주기
-// // Todo 목록 조회
-// export const getTodos = async (): Promise<Todo[]> => {
-//   try {
-export type Todo = Database['public']['Tables']['todos']['Row'];
-export type TodoInsert = Database['public']['Tables']['todos']['Insert'];
-export type TodoUpdate = Database['public']['Tables']['todos']['Update'];
+## 4. 관리자와 일반 회원을 구분함
 
-// 사용자 정보
-export type Profile = Database['public']['Tables']['profiles']['Row'];
-export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
-export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
-
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
-
-export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: '13.0.4';
-  };
-  public: {
-    Tables: {
-      memos: {
-        Row: {
-          created_at: string;
-          id: number;
-          memo: string | null;
-        };
-        Insert: {
-          created_at?: string;
-          id?: number;
-          memo?: string | null;
-        };
-        Update: {
-          created_at?: string;
-          id?: number;
-          memo?: string | null;
-        };
-        Relationships: [];
-      };
-      profiles: {
-        Row: {
-          avatar_url: string | null;
-          created_at: string | null;
-          id: string;
-          nickname: string | null;
-        };
-        Insert: {
-          avatar_url?: string | null;
-          created_at?: string | null;
-          id: string;
-          nickname?: string | null;
-        };
-        Update: {
-          avatar_url?: string | null;
-          created_at?: string | null;
-          id?: string;
-          nickname?: string | null;
-        };
-        Relationships: [];
-      };
-      todos: {
-        Row: {
-          completed: boolean;
-          content: string | null;
-          created_at: string | null;
-          id: number;
-          title: string;
-          updated_at: string | null;
-        };
-        Insert: {
-          completed?: boolean;
-          content?: string | null;
-          created_at?: string | null;
-          id?: number;
-          title: string;
-          updated_at?: string | null;
-        };
-        Update: {
-          completed?: boolean;
-          content?: string | null;
-          created_at?: string | null;
-          id?: number;
-          title?: string;
-          updated_at?: string | null;
-        };
-        Relationships: [];
-      };
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      [_ in never]: never;
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-};
-
-type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>;
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, 'public'>];
-
-export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
-      Row: infer R;
-    }
-    ? R
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
-    ? (DefaultSchema['Tables'] & DefaultSchema['Views'])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R;
-      }
-      ? R
-      : never
-    : never;
-
-export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema['Tables']
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
-      Insert: infer I;
-    }
-    ? I
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
-    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I;
-      }
-      ? I
-      : never
-    : never;
-
-export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema['Tables']
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
-      Update: infer U;
-    }
-    ? U
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
-    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U;
-      }
-      ? U
-      : never
-    : never;
-
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema['Enums']
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
-    ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
-    : never;
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema['CompositeTypes']
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
-    ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
-    : never;
-
-export const Constants = {
-  public: {
-    Enums: {},
-  },
-} as const;
-```
-
-## 3. 프로필 CRUD 를 위한 파일 구성
-
-- `src/lib/profile.ts` 파일 생성
-
-```ts
-/**
- * 사용자 프로필 관리 ( profiles.ts 에서 관리 )
- * - 프로필 생성
- * - 프로필 정보 조회
- * - 프로필 정보 수정
- * - 프로필 정보 삭제
- *
- * 주의 사항
- * - 반드시 사용자 인증 후에만 프로필 생성
- */
-
-import type { ProfileInsert } from '../types/todoType';
-import { supabase } from './supabase';
-
-// 사용자 프로필 생성
-const createProfile = async (newUserProfile: ProfileInsert): Promise<boolean> => {
-  try {
-    const { error } = await supabase.from('profiles').insert([{ ...newUserProfile }]);
-    if (error) {
-      console.log(`프로필 추가에 실패하였습니다 : ${error.message}`);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.log(`프로필 생성 오류 : ${error}`);
-    return false;
-  }
-};
-
-// 사용자 프로필 조회
-const getProfile = () => {};
-
-// 사용자 프로필 수정
-const updateProfile = () => {};
-
-// 사용자 프로필 삭제
-const deleteProfile = () => {};
-
-// 사용자 프로필 이미지 업로드
-const uploadAvatar = () => {};
-
-// 내보내기 ( 하나하나 export 넣기 귀찮을 시 )
-export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar };
-```
-
-## 4. 회원 가입 시 추가 정보 내용 구성
-
-- id(uuid), nickname (null도 가능하긴 함), avata_url(null), create_at (자동으로 들어감)
-- /src/pages/SignUpPage.tsx 추가 수정
+- `실제 관리자 이메일` 을 설정하고 진행
 
 ```tsx
-import { useState } from 'react';
+const isAdmin = user?.email === 'lynn9702@naver.com'; // 관리자 이메일 입력
+```
+
+- App.tsx
+
+```tsx
+import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import AuthCallbackPage from './pages/AuthCallbackPage';
+import HomePage from './pages/HomePage';
+import SignInPage from './pages/SignInPage';
+import SignUpPage from './pages/SignUpPage';
+import TodosPage from './pages/TodosPage';
+import Protected from './contexts/Protected';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProfilePage from './pages/ProfilePage';
+import AdminPage from './pages/AdminPage';
+
+const TopBar = () => {
+  const { signOut, user } = useAuth();
+  // 관리자인 경우 메뉴 추가로 출력하기
+  // isAdmin 에는 boolean 임. ( true / false )
+  const isAdmin = user?.email === 'lynn9702@naver.com'; // 관리자 이메일 입력
+  return (
+    <nav className="bg-blue-400 text-white px-6 py-4 flex justify-between items-center">
+      {/* 로고 또는 홈 */}
+      <Link to="/" className="text-lg font-bold hover:text-blue-900 transition-colors">
+        홈
+      </Link>
+
+      {/* 메뉴 링크 */}
+      <div className="flex space-x-4">
+        {user ? (
+          <>
+            <Link to="/todos" className="hover:text-blue-900 transition-colors">
+              할 일
+            </Link>
+            <Link to="/profile" className="hover:text-blue-900 transition-colors">
+              내 프로필
+            </Link>
+            <button onClick={signOut} className="hover:text-blue-900 transition-colors">
+              로그아웃
+            </button>
+            {isAdmin && (
+              <Link to="/admin" className="hover:text-blue-900 transition-colors">
+                관리자
+              </Link>
+            )}
+          </>
+        ) : (
+          // 로그인 안 했을 때
+          <Link to="/signin" className="hover:text-blue-900 transition-colors">
+            로그인
+          </Link>
+        )}
+      </div>
+    </nav>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <div>
+        <h1>Todo Service</h1>
+        <Router>
+          <TopBar />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/signin" element={<SignInPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            {/* Protected 로 감싸주기 */}
+            <Route
+              path="/todos"
+              element={
+                <Protected>
+                  <TodosPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <Protected>
+                  <ProfilePage />
+                </Protected>
+              }
+            />
+            <Route path="/admin" element={<AdminPage />} />
+          </Routes>
+        </Router>
+      </div>
+    </AuthProvider>
+  );
+}
+
+export default App;
+```
+
+## 5. 관리자 페이지 생성 및 라우터 세팅
+
+- /src/pages/AdminPage.tsx
+
+```tsx
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { createProfile } from '../lib/profile';
-import type { ProfileInsert } from '../types/todoType';
+import type { DeleteRequest, DeleteRequestUpdate } from '../types/TodoType';
 
-function SignUpPage() {
-  const { signUp } = useAuth();
+function AdminPage() {
+  // ts 자리
+  const { user } = useAuth();
+  // 삭제 요청 DB 목록 관리
+  const [deleteRequests, setDeleteRequests] = useState<DeleteRequest[]>([]);
+  // 로딩창
+  const [loading, setLoading] = useState(true);
 
-  const [email, setEmail] = useState<string>('');
-  const [pw, setPw] = useState<string>('');
+  // 관리자 확인
+  const isAdmin = user?.email === 'tarolong@naver.com';
+  useEffect(() => {
+    console.log(user?.email);
+    console.log(user?.id);
+    console.log(user);
+  }, [user]);
 
-  // 추가 정보 ( 닉네임 )
-  const [nickName, setNickName] = useState<string>('');
-  const [msg, setMsg] = useState<string>('');
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // 해당 코드 필수 : 웹브라우저 갱신 막아주기
-    // 유효성 검사
-    if (!email.trim()) {
-      alert('이메일을 입력하세요.');
-      return;
+  // 컴포넌트가 완료가 되었을 때, isAdmin 을 체크 후 실행
+  useEffect(() => {
+    if (isAdmin) {
+      // 회원 탈퇴 신청자 목록을 파악
+      loadDeleteMember();
     }
+  }, [isAdmin]);
 
-    if (!pw.trim()) {
-      alert('비밀번호를 입력하세요.');
-      return;
-    }
-    if (pw.length < 6) {
-      alert('비밀번호는 최소 6자 이상입니다.');
-      return;
-    }
+  // 탈퇴 신청자 목록 파악 테이터 요청
+  const loadDeleteMember = async (): Promise<void> => {
+    try {
+      const { data, error } = await supabase
+        .from('account_deletion_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: false });
 
-    if (!nickName.trim()) {
-      alert('닉네임을 입력하세요.');
-      return;
-    }
-
-    // 회원 가입 및 추가 정보 입력하기
-    const { error, data } = await supabase.auth.signUp({
-      email,
-      password: pw,
-      options: {
-        // 회원 가입 후 이메일로 인증 확인시 리다이렉트 될 URL
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      setMsg(`회원가입 오류 : ${error}`);
-    } else {
-      // 회원가입이 성공했으므로 profiles 도 채워줌
-      if (data?.user?.id) {
-        // 프로필을 추가함
-        const newUser: ProfileInsert = { id: data.user.id, nickname: nickName };
-        const result = await createProfile(newUser);
-        if (result) {
-          // 프로필 추가가 성공한 경우
-          setMsg(`회원 가입 및 프로필 생성 성공. 이메일을 확인 해주세요.`);
-        } else {
-          // 프로필 추가를 실패한 경우
-          setMsg(`회원가입은 성공하였으나, 프로필 생성에 실패하였습니다.`);
-        }
-      } else {
-        setMsg(`이메일이 발송 되었습니다. 이메일을 확인 해주세요.`);
+      if (error) {
+        console.log(`삭제 목록 요청 에러 : ${error.message}`);
+        return;
       }
+
+      // 삭제 요청 목록 보관
+      setDeleteRequests(data || []);
+    } catch (err) {
+      console.log('삭제 요청 목록 오류', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // 탈퇴 승인
+  const approveDelete = async (id: string, updateUser: DeleteRequestUpdate): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('account_deletion_requests')
+        .update({ ...updateUser, status: 'approved' })
+        .eq('id', id);
+      if (error) {
+        console.log(`탈퇴 업데이트 오류 : ${error.message}`);
+        return;
+      }
+
+      alert(`사용자 ${id}의 계정이 삭제가 승인되었습니다. \n\n 관리자님 수동으로 삭제하세요.`);
+
+      // 목록 다시 읽기
+      loadDeleteMember();
+    } catch (err) {
+      console.log('탈퇴승인 오류 : ', err);
     }
   };
 
+  // 탈퇴 거절
+  const rejectDelete = async (id: string, updateUser: DeleteRequestUpdate): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('account_deletion_requests')
+        .update({ ...updateUser, status: 'rejected' })
+        .eq('id', id);
+
+      if (error) {
+        console.log(`탈퇴 업데이트 오류 : ${error.message}`);
+        return;
+      }
+
+      alert(`사용자 ${id}의 계정이 삭제가 거부되었습니다.`);
+
+      // 목록 다시 읽기
+      loadDeleteMember();
+    } catch (err) {
+      console.log('탈퇴거절 오류 : ', err);
+    }
+  };
+
+  // 1. 관리자 아이디가 불일치라면
+  if (!isAdmin) {
+    return (
+      <div>
+        <h1>접근 권한이 없습니다.</h1>
+        <p>관리자 페이지에 접근할 수 없습니다.</p>
+      </div>
+    );
+  }
+  // 2. 로딩중 이라면
+  if (loading) {
+    return <div>로딩중...</div>;
+  }
+
+  // tsx 자리
   return (
     <div>
-      <h2>Todo Service 회원 가입</h2>
-      <div className="border">
-        <form onSubmit={handleSubmit}>
-          <br />
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="이메일"
-          />
-          <br />
-          <br />
-          {/* <button type="button">이메일 중복 확인</button> */}
-          <input
-            type="password"
-            value={pw}
-            onChange={e => setPw(e.target.value)}
-            placeholder="비밀번호"
-          />
-          <input
-            type="text"
-            value={nickName}
-            onChange={e => setNickName(e.target.value)}
-            placeholder="닉네임"
-          />
-          <br />
-          {/* form 안에선 button type 지정해주기 */}
-          <button type="submit">회원가입</button>
-        </form>
-        <p>{msg}</p>
+      <h1>관리자 페이지</h1>
+      <div>
+        {deleteRequests.length === 0 ? (
+          <p>대기 중인 삭제 요청이 없습니다.</p>
+        ) : (
+          <div>
+            {deleteRequests.map(item => (
+              <div key={item.id}>
+                <div>
+                  <h3>사용자: {item.user_email}</h3>
+                  <span>대기 중</span>
+                </div>
+                <div>
+                  <p>사용자 ID : {item.user_id}</p>
+                  <p>요청시간 : {item.requested_at}</p>
+                  <p>사유 : {item.reason}</p>
+                </div>
+                <div>
+                  <button onClick={() => approveDelete(item.id, item)}>승인</button>
+                  <button onClick={() => rejectDelete(item.id, item)}>거절</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default SignUpPage;
+export default AdminPage;
 ```
 
-## 5. 사용자 프로필 CRUD 기능 추가
+### 5.2 라우터 적용
 
-- /src/lib/profile.ts 내용 추가
+- App.tsx
+
+```tsx
+import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import AuthCallbackPage from './pages/AuthCallbackPage';
+import HomePage from './pages/HomePage';
+import SignInPage from './pages/SignInPage';
+import SignUpPage from './pages/SignUpPage';
+import TodosPage from './pages/TodosPage';
+import Protected from './contexts/Protected';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProfilePage from './pages/ProfilePage';
+import AdminPage from './pages/AdminPage';
+
+const TopBar = () => {
+  const { signOut, user } = useAuth();
+  // 관리자인 경우 메뉴 추가로 출력하기
+  // isAdmin 에는 boolean 임. ( true / false )
+  const isAdmin = user?.email === 'lynn9702@naver.com'; // 관리자 이메일 입력
+  return (
+    <nav className="bg-blue-400 text-white px-6 py-4 flex justify-between items-center">
+      {/* 로고 또는 홈 */}
+      <Link to="/" className="text-lg font-bold hover:text-blue-900 transition-colors">
+        홈
+      </Link>
+
+      {/* 메뉴 링크 */}
+      <div className="flex space-x-4">
+        {user ? (
+          <>
+            <Link to="/todos" className="hover:text-blue-900 transition-colors">
+              할 일
+            </Link>
+            <Link to="/profile" className="hover:text-blue-900 transition-colors">
+              내 프로필
+            </Link>
+            <button onClick={signOut} className="hover:text-blue-900 transition-colors">
+              로그아웃
+            </button>
+            {isAdmin && (
+              <Link to="/admin" className="hover:text-blue-900 transition-colors">
+                관리자
+              </Link>
+            )}
+          </>
+        ) : (
+          // 로그인 안 했을 때
+          <Link to="/signin" className="hover:text-blue-900 transition-colors">
+            로그인
+          </Link>
+        )}
+      </div>
+    </nav>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <div>
+        <h1>Todo Service</h1>
+        <Router>
+          <TopBar />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/signin" element={<SignInPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            {/* Protected 로 감싸주기 */}
+            <Route
+              path="/todos"
+              element={
+                <Protected>
+                  <TodosPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <Protected>
+                  <ProfilePage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <Protected>
+                  <AdminPage />
+                </Protected>
+              }
+            />
+          </Routes>
+        </Router>
+      </div>
+    </AuthProvider>
+  );
+}
+
+export default App;
+```
+
+## 6. 회원 탈퇴 기능
+
+### 6.1 AuthContext 기능 업데이트
 
 ```tsx
 /**
- * 사용자 프로필 관리 ( profiles.ts 에서 관리 )
- * - 프로필 생성
- * - 프로필 정보 조회
- * - 프로필 정보 수정
- * - 프로필 정보 삭제
- *
- * 주의 사항
- * - 반드시 사용자 인증 후에만 프로필 생성
+ * 주요 기능
+ * - 사용자 세션관리
+ * - 로그인, 회원가입, 로그아웃
+ * - 사용자 인증 정보 상태 변경 감시
+ * - 전역 인증 상태를 컴포넌트에 반영
  */
 
-import type { Profile, ProfileInsert, ProfileUpdate } from '../types/todoType';
-import { supabase } from './supabase';
+import type { Session, User } from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
+import { supabase } from '../lib/supabase';
+import type { DeleteRequestInsert } from '../types/todoType';
 
-// 사용자 프로필 생성
-const createProfile = async (newUserProfile: ProfileInsert): Promise<boolean> => {
-  try {
-    const { error } = await supabase.from('profiles').insert([{ ...newUserProfile }]);
-    if (error) {
-      console.log(`프로필 추가에 실패하였습니다 : ${error.message}`);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.log(`프로필 생성 오류 : ${error}`);
-    return false;
-  }
+// 1. 인증 Context Type
+type AuthContextType = {
+  // 현재 사용자의 세션 정보 ( 로그인 상태, 토큰 )
+  session: Session | null;
+  // 현재 로그인 된 사용자 정보
+  user: User | null;
+  // 회원 가입 함수 - 개발자가 직접 수기 작성 ( 사용자의 이메일, 비밀번호를 받음 ) : 비동기라서 Promise 로 들어옴
+  signUp: (email: string, password: string) => Promise<{ error?: string }>;
+  // 회원 로그인 함수 - 개발자가 직접 수기 작성 ( 사용자의 이메일, 비밀번호를 받음 ) : 비동기라서 Promise 로 들어옴
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  // 회원 로그아웃
+  signOut: () => Promise<void>;
+  // 회원 정보 로딩 상태
+  loading: boolean;
+  // 회원 탈퇴 기능
+  deleteAccount: () => Promise<{ error?: string; success?: boolean; message?: string }>;
 };
 
-// 사용자 프로필 조회
-const getProfile = async (userId: string): Promise<Profile | null> => {
-  try {
-    const { error, data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+// 2. 인증 Context 생성 ( 인증 기능을 Children들 Component 에서 활용하게 해줌 )
+const AuthContext = createContext<AuthContextType | null>(null);
+
+// 3. 인증 Context Provider
+export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
+  // 현재 사용자 세션
+  const [session, setSession] = useState<Session | null>(null);
+  // 현재 로그인한 사용자 정보
+  const [user, setUser] = useState<User | null>(null);
+  // 로딩 상태 추가 : 초기 실행시 loading 시킴, true
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // 실행이 되자마자 ( 초기 세션 ) 로드 및 인증 상태 변경 감시 ( 새로고침을 하던 뭘 하던 바로 작동되게끔 )
+  useEffect(() => {
+    // 세션을 초기에 로딩을 한 후 처리함
+    const loadSession = async () => {
+      try {
+        setLoading(true); // 로딩중. 해당 코드는 굳이 안적어도 됨
+
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session ? data.session : null);
+        setUser(data.session?.user ?? null);
+      } catch (error) {
+        console.log(error);
+      } finally {
+        // finally : 성공해도 실행, 실패해도 실행 ( 과정이 끝나면 무조건 로딩완료함 )
+        setLoading(false);
+      }
+    };
+    loadSession();
+
+    // 인증상태 변경 이벤트를 체크함 ( 로그인, 로그아웃 , 토큰 갱신 등의 이벤트 실시간 감시 )
+    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+    });
+    // Component 가 제거 되면, 이벤트 체크 해제함 : cleanUp ( return () => {} << 이렇게 생김 )
+    return () => {
+      // 이벤트 감시 해제
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  // 회원 가입 (이메일, 비밀번호)
+  const signUp: AuthContextType['signUp'] = async (email, password) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // 회원 가입 후 이메일로 인증 확인 시 리다이렉트 될 URL
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
     if (error) {
-      console.log(error.message);
-      return null;
+      return { error: error.message };
     }
-    return data;
-  } catch (error) {
-    console.log(error);
-    return null;
-  }
+    // 우리는 이메일 확인을 활성화 시켰음
+    // 이메일 확인 후 인증 전까지는 아무것도 넘어오지 않음
+    return {};
+  };
+
+  // 회원 로그인 (이메일, 비밀번호)
+  const signIn: AuthContextType['signIn'] = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password, options: {} });
+    if (error) {
+      return { error: error.message };
+    }
+    return {};
+  };
+
+  // 회원 로그아웃
+  const signOut: AuthContextType['signOut'] = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // 회원 탈퇴 기능
+  const deleteAccount: AuthContextType['deleteAccount'] = async () => {
+    try {
+      // 기존에 사용한 데이터들을 먼저 정리한다
+      const { error: profileError } = await supabase.from('profiles').delete().eq('id', user?.id);
+      if (profileError) {
+        console.log('프로필 삭제 실패', profileError.message);
+        return { error: '프로필 삭제에 실패했습니다.' };
+      }
+
+      // 탈퇴 신청 데이터 추가
+      // account_deletion_requests 에 Pending 으로 Insert 함
+      const deleteInfo: DeleteRequestInsert = {
+        user_email: user?.email as string,
+        user_id: user?.id,
+        reason: '사용자 요청',
+        status: 'pending',
+      };
+      const { error: deleteRequestsError } = await supabase
+        .from('account_deletion_requests')
+        .insert([{ ...deleteInfo }]);
+
+      if (deleteRequestsError) {
+        console.log('탈퇴 목록 추가에 실패', deleteRequestsError.message);
+        return { error: '탈퇴 목록 추가에 실패했습니다.' };
+      }
+
+      // 강제 로그아웃 시켜줌
+      await signOut();
+
+      return {
+        success: true,
+        message: '계정 삭제가 요청되었습니다. 관리자 승인 후 완전히 삭제됩니다.',
+      };
+    } catch (err) {
+      console.log('탈퇴 요청 기능 오류 : ', err);
+      return { error: '계정 탈퇴 처리 중 오류가 발생하였습니다.' };
+    }
+  };
+
+  const value: AuthContextType = { signUp, signOut, signIn, user, session, loading, deleteAccount };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// 사용자 프로필 수정
-const updateProfile = async (editUserProfile: ProfileUpdate, userId: string): Promise<boolean> => {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ ...editUserProfile })
-      .eq('id', userId);
-    if (error) {
-      console.log(error.message);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.log(error);
-    return false;
+// const {signUp, signIn, signOut, user, session} = useAuth()
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('AuthContext 가 없습니다.');
   }
+  return ctx;
 };
-
-// 사용자 프로필 삭제
-const deleteProfile = async (): Promise<any> => {};
-
-// 사용자 프로필 이미지 업로드
-const uploadAvatar = async (): Promise<any> => {};
-
-// 내보내기 ( 하나하나 export 넣기 귀찮을 시 )
-export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar };
 ```
 
-## 6. 사용자 프로필 출력 페이지
+### 6.2 ProfilePage 업데이트
 
-- /src/pages/ProfilePage.tsx 파일 생성
+- ProfilePage.tsx
 
 ```tsx
 /**
@@ -536,7 +602,7 @@ import type { Profile, ProfileUpdate } from '../types/todoType';
 
 function ProfilePage() {
   // 회원 기본 정보
-  const { user } = useAuth();
+  const { user, deleteAccount } = useAuth();
   // 데이터 가져오는 동안의 로딩
   const [loading, setLoading] = useState<boolean>(true);
   // 사용자 프로필
@@ -601,13 +667,24 @@ function ProfilePage() {
     }
   };
 
+  // 회원탈퇴
+  const handleDeleteUser = () => {
+    const message: string = '계정을 완전히 삭제하시겠습니까? 복구가 불가능 합니다.';
+    let isConfirm = false;
+    isConfirm = confirm(message);
+
+    if (isConfirm) {
+      deleteAccount();
+    }
+  };
+
   useEffect(() => {
     loadProfile();
   }, []);
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[999] w-full h-full bg-green-600 flex items-center justify-center">
+      <div className="fixed inset-0 z-[999] w-full h-full bg-sky-400 flex items-center justify-center">
         <h1 className="text-white text-xl font-bold">프로필 로딩중 ...</h1>
       </div>
     );
@@ -615,54 +692,66 @@ function ProfilePage() {
   // error 메세지 출력하기
   if (error) {
     return (
-      <div>
-        <h2>프로필</h2>
-        <div>{error}</div>
-        <button onClick={loadProfile}>재시도</button>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+        <h2 className="text-2xl font-bold mb-4">프로필</h2>
+        <div className="mb-4 text-red-600">{error}</div>
+        <button
+          onClick={loadProfile}
+          className="px-4 py-2 bg-blue-200 text-white rounded-lg hover:bg-blue-300 transition-colors"
+        >
+          재시도
+        </button>
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">회원 정보</h2>
+      <h2 className="text-3xl font-bold mb-8 text-blue-700">회원 정보</h2>
       {/* 사용자 기본 정보 */}
-      <div className="mb-6 p-4 border rounded-lg shadow-sm bg-white">
-        <h3 className="text-xl font-semibold mb-2">기본 정보</h3>
-        <div className="text-gray-700">이메일 : {user?.email}</div>
+      <div className="mb-6 p-6 border rounded-lg shadow bg-white">
+        <h3 className="text-xl font-semibold mb-4">기본 정보</h3>
+        <div className="text-gray-700 mb-2">이메일 : {user?.email}</div>
         <div className="text-gray-700">
           가입일: {user?.created_at && new Date(user.created_at).toLocaleString()}
         </div>
       </div>
       {/* 사용자 추가 정보 */}
-      <div className="p-4 border rounded-lg shadow-sm bg-white">
-        <h3 className="text-xl font-semibold mb-2">사용자 추가 정보</h3>
-        <div className="text-gray-700">아이디 : {profileData?.id}</div>
+      <div className="p-6 border rounded-lg shadow bg-white">
+        <h3 className="text-xl font-semibold mb-4">사용자 추가 정보</h3>
+        <div className="text-gray-700 mb-2">아이디 : {profileData?.id}</div>
         {userEdit ? (
           <>
-            <div>
+            <div className="mb-4">
               닉네임 :
-              <input type="text" value={nickName} onChange={e => setNickName(e.target.value)} />
+              <input
+                type="text"
+                value={nickName}
+                onChange={e => setNickName(e.target.value)}
+                className="ml-2 px-2 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-400"
+              />
             </div>
-            <div className="text-gray-700">
+            <div className="text-gray-700 mb-4">
               아바타 :
               {profileData?.avatar_url ? (
-                <img src={profileData.avatar_url} />
+                <img src={profileData.avatar_url} className="h-9 w-10 rounded-full mt-2" />
               ) : (
-                <button className="border px-1">파일 추가</button>
+                <button className="ml-2 px-2 py-1 border rounded-lg hover:bg-gray-100">
+                  파일 추가
+                </button>
               )}
             </div>
           </>
         ) : (
           <>
-            <div className="text-gray-700">닉네임 : {profileData?.nickname}</div>
-            <div className="text-gray-700">
+            <div className="text-gray-700 mb-4">닉네임 : {profileData?.nickname}</div>
+            <div className="text-gray-700 mb-4">
               아바타 :
               {profileData?.avatar_url ? (
-                <img src={profileData.avatar_url} />
+                <img src={profileData.avatar_url} className="h-16 w-16 rounded-full mt-2" />
               ) : (
                 <img
-                  className="h-[30px] w-[35px]"
+                  className="h-16 w-16 rounded-full mt-2"
                   src={
                     'https://e7.pngegg.com/pngimages/867/694/png-clipart-user-profile-default-computer-icons-network-video-recorder-avatar-cartoon-maker-blue-text.png'
                   }
@@ -671,16 +760,8 @@ function ProfilePage() {
             </div>
           </>
         )}
-        <div className="text-gray-700">
-          아바타 :
-          {profileData?.avatar_url ? (
-            <img src={profileData.avatar_url} />
-          ) : (
-            <button className="border px-1">파일 추가</button>
-          )}
-        </div>
-        <div className="text-gray-700">
-          가입일 :{profileData?.created_at && new Date(profileData.created_at).toLocaleString()}
+        <div className="text-gray-700 mb-4">
+          가입일 : {profileData?.created_at && new Date(profileData.created_at).toLocaleString()}
         </div>
       </div>
       {error && (
@@ -688,23 +769,39 @@ function ProfilePage() {
           {error}
         </div>
       )}
-      <div>
+      <div className="mt-6 flex gap-3">
         {userEdit ? (
           <>
-            <button onClick={saveProfile}>수정 확인</button>
+            <button
+              onClick={saveProfile}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+            >
+              수정 확인
+            </button>
             <button
               onClick={() => {
                 setUserEdit(false);
                 setNickName(profileData?.nickname || '');
               }}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
             >
               수정 취소
             </button>
           </>
         ) : (
           <>
-            <button onClick={() => setUserEdit(true)}>정보 수정</button>
-            <button>회원 탈퇴</button>
+            <button
+              onClick={() => setUserEdit(true)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              정보 수정
+            </button>
+            <button
+              onClick={handleDeleteUser}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+            >
+              회원 탈퇴
+            </button>
           </>
         )}
       </div>
@@ -713,85 +810,4 @@ function ProfilePage() {
 }
 
 export default ProfilePage;
-```
-
-## 7. Router 세팅
-
-- App.tsx
-
-```tsx
-import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
-import AuthCallbackPage from './pages/AuthCallbackPage';
-import HomePage from './pages/HomePage';
-import SignInPage from './pages/SignInPage';
-import SignUpPage from './pages/SignUpPage';
-import TodosPage from './pages/TodosPage';
-import Protected from './contexts/Protected';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import ProfilePage from './pages/ProfilePage';
-
-const TopBar = () => {
-  const { signOut, user } = useAuth();
-  return (
-    <nav className="bg-blue-400 text-white px-6 py-4 flex justify-between items-center">
-      {/* 로고 또는 홈 */}
-      <Link to="/" className="text-lg font-bold hover:text-blue-900 transition-colors">
-        홈
-      </Link>
-
-      {/* 메뉴 링크 */}
-      <div className="flex space-x-4">
-        {user && (
-          <Link to="/todos" className="hover:text-blue-900 transition-colors">
-            할 일
-          </Link>
-        )}
-        {user && (
-          <Link to="/profile" className="hover:text-blue-900 transition-colors">
-            내 프로필
-          </Link>
-        )}
-        {user && <button onClick={signOut}>로그아웃</button>}
-      </div>
-    </nav>
-  );
-};
-
-function App() {
-  return (
-    <AuthProvider>
-      <div>
-        <h1>Todo Service</h1>
-        <Router>
-          <TopBar />
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/signup" element={<SignUpPage />} />
-            <Route path="/signin" element={<SignInPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            {/* Protected 로 감싸주기 */}
-            <Route
-              path="/todos"
-              element={
-                <Protected>
-                  <TodosPage />
-                </Protected>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <Protected>
-                  <ProfilePage />
-                </Protected>
-              }
-            />
-          </Routes>
-        </Router>
-      </div>
-    </AuthProvider>
-  );
-}
-
-export default App;
 ```

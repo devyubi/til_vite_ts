@@ -78,25 +78,57 @@ const TodoItem = ({ todo }: TodoItemProps) => {
   };
 
   return (
-    <li>
+    <li className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition">
       {isEdit ? (
-        <>
+        <div className="flex items-center space-x-2 w-full">
           <input
             type="text"
             value={editTitle}
             onChange={e => handleChangeTitle(e)}
             onKeyDown={e => handleKeyDown(e)}
+            className="flex-grow border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
-          <button onClick={handleEditSave}>저장</button>
-          <button onClick={handleEditCancel}>취소</button>
-        </>
+          <button
+            onClick={handleEditSave}
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+          >
+            저장
+          </button>
+          <button
+            onClick={handleEditCancel}
+            className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition"
+          >
+            취소
+          </button>
+        </div>
       ) : (
-        <>
-          <input type="checkbox" checked={todo.completed} onChange={handleToggle} />
-          <span>{todo.title}</span>
-          <button onClick={() => setIsEdit(true)}>수정</button>
-          <button onClick={handleDelete}>삭제</button>
-        </>
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={todo.completed}
+              onChange={handleToggle}
+              className="h-4 w-4 text-blue-500"
+            />
+            <span className={`${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+              {todo.title}
+            </span>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setIsEdit(true)}
+              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+            >
+              수정
+            </button>
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition"
+            >
+              삭제
+            </button>
+          </div>
+        </div>
       )}
     </li>
   );

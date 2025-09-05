@@ -9,6 +9,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import { supabase } from '../lib/supabase';
+import type { DeleteRequestInsert } from '../types/todoType';
 
 // 1. 인증 Context Type
 type AuthContextType = {
@@ -24,6 +25,8 @@ type AuthContextType = {
   signOut: () => Promise<void>;
   // 회원 정보 로딩 상태
   loading: boolean;
+  // 회원 탈퇴 기능
+  deleteAccount: () => Promise<{ error?: string; success?: boolean; message?: string }>;
 };
 
 // 2. 인증 Context 생성 ( 인증 기능을 Children들 Component 에서 활용하게 해줌 )
@@ -56,12 +59,6 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
       }
     };
     loadSession();
-
-    // // 기존 세션이 있는지 확인
-    // supabase.auth.getSession().then(({ data }) => {
-    //   setSession(data.session ? data.session : null);
-    //   setUser(data.session?.user ?? null);
-    // });
 
     // 인증상태 변경 이벤트를 체크함 ( 로그인, 로그아웃 , 토큰 갱신 등의 이벤트 실시간 감시 )
     const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
@@ -101,12 +98,53 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
     }
     return {};
   };
+
   // 회원 로그아웃
   const signOut: AuthContextType['signOut'] = async () => {
     await supabase.auth.signOut();
   };
 
-  const value: AuthContextType = { signUp, signOut, signIn, user, session, loading };
+  // 회원 탈퇴 기능
+  const deleteAccount: AuthContextType['deleteAccount'] = async () => {
+    try {
+      // 기존에 사용한 데이터들을 먼저 정리한다
+      const { error: profileError } = await supabase.from('profiles').delete().eq('id', user?.id);
+      if (profileError) {
+        console.log('프로필 삭제 실패', profileError.message);
+        return { error: '프로필 삭제에 실패했습니다.' };
+      }
+
+      // 탈퇴 신청 데이터 추가
+      // account_deletion_requests 에 Pending 으로 Insert 함
+      const deleteInfo: DeleteRequestInsert = {
+        user_email: user?.email as string,
+        user_id: user?.id,
+        reason: '사용자 요청',
+        status: 'pending',
+      };
+      const { error: deleteRequestsError } = await supabase
+        .from('account_deletion_requests')
+        .insert([{ ...deleteInfo }]);
+
+      if (deleteRequestsError) {
+        console.log('탈퇴 목록 추가에 실패', deleteRequestsError.message);
+        return { error: '탈퇴 목록 추가에 실패했습니다.' };
+      }
+
+      // 강제 로그아웃 시켜줌
+      await signOut();
+
+      return {
+        success: true,
+        message: '계정 삭제가 요청되었습니다. 관리자 승인 후 완전히 삭제됩니다.',
+      };
+    } catch (err) {
+      console.log('탈퇴 요청 기능 오류 : ', err);
+      return { error: '계정 탈퇴 처리 중 오류가 발생하였습니다.' };
+    }
+  };
+
+  const value: AuthContextType = { signUp, signOut, signIn, user, session, loading, deleteAccount };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

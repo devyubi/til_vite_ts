@@ -5,7 +5,6 @@ import { TodoProvider } from '../contexts/TodoContext';
 function TodosPage() {
   return (
     <div>
-      <h2>할 일</h2>
       <TodoProvider>
         <div>
           <TodoWrite />
