@@ -16,11 +16,23 @@ export const getTodos = async (): Promise<Todo[]> => {
   return data || [];
 };
 // Todo 생성
-export const createTodo = async (newTodo: TodoInsert): Promise<Todo | null> => {
+// 로그인을 하고 나면 실제로 user_id 가 이미 파악이 됨
+// TodoInsert 에서 user_id : 값을 생략하는 타입을 생성
+// 타입스크립트에서 Omit을 이용하면, 특정 키를 제거 할 수 있음.
+export const createTodo = async (newTodo: Omit<TodoInsert, 'user_id'>): Promise<Todo | null> => {
   try {
+    // 현재 로그인 한 사용자 정보 가져오기
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
     const { data, error } = await supabase
       .from('todos')
-      .insert([{ ...newTodo, completed: false }])
+      .insert([{ ...newTodo, completed: false, user_id: user.id }])
       .select()
       .single();
     if (error) {
@@ -33,7 +45,13 @@ export const createTodo = async (newTodo: TodoInsert): Promise<Todo | null> => {
   }
 };
 // Todo 수정
-export const updateTodo = async (id: number, editTitle: TodoUpdate): Promise<Todo | null> => {
+// 로그인을 하고 나면 실제로 user_id 가 이미 파악이 됨
+// TodoInsert 에서 user_id : 값을 생략하는 타입을 생성
+// 타입스크립트에서 Omit을 이용하면, 특정 키를 제거 할 수 있음.
+export const updateTodo = async (
+  id: number,
+  editTitle: Omit<TodoUpdate, 'user_id'>,
+): Promise<Todo | null> => {
   try {
     // 업데이트 구문 : const { data, error } = await supabase ~ .select();
     const { data, error } = await supabase

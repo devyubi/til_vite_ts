@@ -119,6 +119,7 @@ export type Database = {
           id: number;
           title: string;
           updated_at: string | null;
+          user_id: string;
         };
         Insert: {
           completed?: boolean;
@@ -127,6 +128,7 @@ export type Database = {
           id?: number;
           title: string;
           updated_at?: string | null;
+          user_id: string;
         };
         Update: {
           completed?: boolean;
@@ -135,6 +137,7 @@ export type Database = {
           id?: number;
           title?: string;
           updated_at?: string | null;
+          user_id?: string;
         };
         Relationships: [];
       };

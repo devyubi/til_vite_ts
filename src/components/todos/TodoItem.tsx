@@ -78,7 +78,7 @@ const TodoItem = ({ todo }: TodoItemProps) => {
   };
 
   return (
-    <li className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition">
+    <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition">
       {isEdit ? (
         <div className="flex items-center space-x-2 w-full">
           <input
@@ -130,7 +130,7 @@ const TodoItem = ({ todo }: TodoItemProps) => {
           </div>
         </div>
       )}
-    </li>
+    </div>
   );
 };
 
