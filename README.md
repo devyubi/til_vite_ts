@@ -32,3 +32,630 @@ CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Users can delete own profile" ON profiles FOR DELETE USING (auth.uid() = id);
 ```
+
+## 3. Supabase Profiles 테이블 관련 코드 업데이트
+
+- /src/lib/profile.ts 업데이트 (createProfile, removeAvatar 기능 추가)
+
+```ts
+/**
+ * 사용자 프로필 관리 ( profiles.ts 에서 관리 )
+ * - 프로필 생성
+ * - 프로필 정보 조회
+ * - 프로필 정보 수정
+ * - 프로필 정보 삭제
+ *
+ * 주의 사항
+ * - 반드시 사용자 인증 후에만 프로필 생성
+ */
+
+import type { Profile, ProfileInsert, ProfileUpdate } from '../types/todoType';
+import { supabase } from './supabase';
+
+// 사용자 프로필 생성
+const createProfile = async (newUserProfile: ProfileInsert): Promise<boolean> => {
+  try {
+    const { error } = await supabase.from('profiles').insert([{ ...newUserProfile }]);
+    if (error) {
+      console.log(`프로필 추가에 실패하였습니다 : ${error.message}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.log(`프로필 생성 오류 : ${error}`);
+    return false;
+  }
+};
+
+// 사용자 프로필 조회
+const getProfile = async (userId: string): Promise<Profile | null> => {
+  try {
+    const { error, data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (error) {
+      console.log(error.message);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+// 사용자 프로필 수정
+const updateProfile = async (editUserProfile: ProfileUpdate, userId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ...editUserProfile })
+      .eq('id', userId);
+    if (error) {
+      console.log(error.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// 사용자 프로필 삭제
+const deleteProfile = async (): Promise<any> => {};
+
+// 사용자 프로필 이미지 업로드
+const uploadAvatar = async (file: File, userId: string): Promise<string | null> => {
+  try {
+    // 파일 타입 검사
+    // 파일 형식 검증
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`지원하지 않는 파일 형식입니다. 허용 형식: ${allowedTypes.join(', ')}`);
+    }
+    // 파일 크기 검증 (5MB 제한)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw new Error(`파일 크기가 너무 큽니다. 최대 5MB까지 업로드 가능합니다.`);
+    }
+
+    // 기존에 아바타 이미지가 있으면 무조건 삭제부터 함.
+    const result = await cleanupUserAvatars(userId);
+    if (!result) {
+      console.log(`파일 삭제에 실패하였습니다.`);
+    }
+
+    // 파일명이 중복되지 않도록 이름을 생성함
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    // storage 에 bucket 이 존재하는지 검사
+    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
+    if (bucketError) {
+      throw new Error(`storage 버킷 확인 실패 : ${bucketError.message}`);
+    }
+    // bucket 들의 목록 전달 {} 형태로 나옴. user-images 라는 이름에 업로드
+    let profileImagesBucket = buckets.find(item => item.name === 'user-images');
+    if (!profileImagesBucket) {
+      throw new Error('user-images 버킷이 존재하지 않습니다. 버킷 생성 필요.');
+    }
+    // 파일 업로드 : upload(파일명, 실제파일, 옵션)
+    const { data, error } = await supabase.storage.from('user-images').upload(filePath, file, {
+      cacheControl: '3600', // 3600 초는 1시간. 1시간동안 파일 캐시 적용함
+      upsert: false, // 동일한 파일명은 덮어씌운다
+    });
+    if (error) {
+      throw new Error(`업로드 실패 : ${error.message}`);
+    }
+    // https 문자열로 주소를 알아내서 활용
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('user-images').getPublicUrl(filePath);
+    return publicUrl;
+  } catch (error) {
+    throw new Error(`업로드 오류가 발생했습니다. : ${error}`);
+  }
+};
+// 아바타 이미지는 한장을 유지해야 하므로 모두 제거하는 기능이 필요함
+const cleanupUserAvatars = async (userId: string): Promise<boolean> => {
+  try {
+    const { data, error: listError } = await supabase.storage
+      .from('user-images')
+      .list('avatars', { limit: 1000 });
+    if (listError) {
+      console.log(`목록 요청 실패 : ${listError.message}`);
+    }
+    // userId 에 해당하는 것만 필터링하여 삭제해야함. (아무거나 다 지우면 안되는 것 방지)
+    if (data && data.length > 0) {
+      const userFile = data.filter(item => item.name.startsWith(`${userId}-`));
+      if (userFile && userFile.length > 0) {
+        const filePath = userFile.map(item => `avatars/${item.name}`);
+        const { error: removeError } = await supabase.storage.from('user-images').remove(filePath);
+        if (removeError) {
+          console.log(`파일 삭제 실패 : ${removeError.message}`);
+          return false;
+        }
+        return true;
+      }
+    }
+    return true;
+  } catch (error) {
+    console.log(`아바타 이미지 전체 삭제 오류 : ${error}`);
+    return false;
+  }
+};
+
+// 사용자 프로필 이미지 제거
+const removeAvatar = async (userId: string): Promise<boolean> => {
+  try {
+    // 현재 로그인 한 사용자의 avatar_url 을 읽어와야함
+    // 여기서 파일명을 추출함
+    const profile = await getProfile(userId);
+    // 사용자가 avatar_url 이 없으면
+    if (!profile?.avatar_url) {
+      return true; // 작업 완료
+    }
+    // 1. 만약 avatar_url 이 존재한다면 이름 파악, 파일 삭제
+    let deleteSuccess = false;
+    try {
+      // url 에 파일명을 찾아야함 (url 로 변환하면 path와 파일 구분이 수월함)
+      const url = new URL(profile.avatar_url);
+      const pathParts = url.pathname.split('/');
+      const publicIndex = pathParts.indexOf('public');
+      if (publicIndex !== -1 && publicIndex + 1 < pathParts.length) {
+        const bucketName = pathParts[publicIndex + 1];
+        const filePath = pathParts.slice(publicIndex + 2).join('/');
+        // 실제로 찾아낸 bucketName 과 filePath 로 삭제
+        const { data, error } = await supabase.storage.from(bucketName).remove([filePath]);
+        if (error) {
+          throw new Error('파일을 찾았지만, 삭제에 실패하였습니다.');
+        }
+        // 파일 삭제 성공
+        deleteSuccess = true;
+      }
+    } catch (err) {
+      console.log(err);
+    }
+
+    // 2. 만약 avatar_url 을 제대로 파싱하지 못했다면?
+    if (!deleteSuccess) {
+      try {
+        // 전체 목록을 일단 읽어옴
+        const { data: files, error: listError } = await supabase.storage
+          .from('user-images')
+          .list('avatars', { limit: 1000 });
+        if (!listError && files && files.length > 0) {
+          const userFiles = files.filter(item => item.name.startsWith(`${userId}-`));
+          if (userFiles.length > 0) {
+            const filePath = userFiles.map(item => `avatars/${item.name}`);
+            const { error } = await supabase.storage.from('user-images').remove(filePath);
+            if (!error) {
+              deleteSuccess = true;
+            }
+          }
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    }
+    return true;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// 내보내기 ( 하나하나 export 넣기 귀찮을 시 )
+export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar, removeAvatar };
+```
+
+## 4. ProfilePage.tsx 에 Edit 기능 추가
+
+- Edit 에서 프로필 이미지 관련한 다양한 시나리오에 따라서 useState 추가
+
+```tsx
+// 사용자 아바타 이미지를 위한 상태관리
+// 이미지 업로드 상태 표현
+const [uploading, setUploading] = useState<boolean>(false);
+// 미리보기 이미지 url (문자열)
+const [previewImage, setPreviewImage] = useState<string | null>(null);
+// 실제 파일 (바이너리)
+const [selectedFile, setSelectedFile] = useState<File | null>(null);
+// 사용자가 새로운 이미지 선택시 즉, 편집 중인 경우 원본 URL 보관용 문자열
+const [originalAvatarUrl, setOriginalAvartarUrl] = useState<string | null>(null);
+// 이미지 제거 요청 상태(그러나, 실제 file 제거는 수정확인 버튼 눌렀을 때 처리)
+const [imageRemovalRequest, setImageRemovalReauest] = useState<boolean>(false);
+// input type="file" 태그 참조
+const fileInputRef = useRef<HTMLInputElement>(null);
+```
+
+- 전체 ProfilePage.tsx
+
+```tsx
+/**
+ * 사용자 프로필 페이지
+ * - 기본 정보 표시
+ * - 정보 수정
+ * - 회원 탈퇴 기능 : 반드시 확인을 거치고 진행해야함
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getProfile, removeAvatar, updateProfile, uploadAvatar } from '../lib/profile';
+import type { Profile, ProfileUpdate } from '../types/todoType';
+
+function ProfilePage() {
+  // 회원 기본 정보
+  const { user, deleteAccount } = useAuth();
+  // 데이터 가져오는 동안의 로딩
+  const [loading, setLoading] = useState<boolean>(true);
+  // 사용자 프로필
+  const [profileData, setProfileData] = useState<Profile | null>(null);
+  // Error 메세지
+  const [error, setError] = useState<string>('');
+  // 회원 정보 수정
+  const [userEdit, setUserEdit] = useState<boolean>(false);
+  // 회원 닉네임 보관
+  const [nickName, setNickName] = useState<string>('');
+
+  // 사용자 아바타 이미지를 위한 상태 관리
+  // 이미지 업로드 상태 표현
+  const [uploading, setUploading] = useState<boolean>(false);
+  // 미리보기 이미지 URL (문자열)
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // 실제 파일 (바이너리)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // 사용자가 새로운 이미지 선택 시 (편집중인 경우), 원본 URL 보관용 (문자열)
+  const [originalAvatarUrl, setOriginalAvatarUrl] = useState<string | null>(null);
+  // 이미지 제거 요청 상태 (그러나, 실제 file 제거는 수정 확인 버튼을 눌렀을 때 처리함)
+  const [imageRemoverRequest, setImageRemoverRequest] = useState<boolean>(false);
+  // input type='file' 태그 참조
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 사용자 프로필 정보 가져오기
+  const loadProfile = async () => {
+    if (!user?.id) {
+      // 사용자의 id 가 없으면 중지
+      setError('사용자의 정보를 찾을 수 없습니다.');
+      setLoading(false);
+      return;
+    }
+    try {
+      // 사용자 정보를 가져오기 ( null 일 수도 있음 )
+      const tempData = await getProfile(user?.id);
+      if (!tempData) {
+        // null 일 경우
+        setError('사용자의 프로필 정보를 찾을 수 없습니다.');
+        return;
+      }
+
+      // 사용자 정보가 있을 경우
+      setNickName(tempData.nickname || '');
+      setProfileData(tempData);
+    } catch (error) {
+      console.log(error);
+      setError('사용자의 프로필 정보 호출 오류');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 프로필 데이터 업데이트
+  const saveProfile = async () => {
+    if (!user) {
+      return;
+    }
+    if (!profileData) {
+      return;
+    }
+    // 여러개가 업로드 되어선 안됨
+    setLoading(true);
+
+    try {
+      let imgUrl = originalAvatarUrl; // 원본 이미지 URL
+      // 아바타 이미지 제거라면?
+      if (imageRemoverRequest) {
+        // storage 에 실제 이미지를 제거함
+        const success = await removeAvatar(user.id);
+        console.log('success', success);
+        if (success) {
+          imgUrl = null;
+        } else {
+          alert('이미지 제거에 실패했습니다. 기존 이미지가 유지 됩니다.');
+        }
+      } else if (selectedFile) {
+        // 새로운 이미지가 업로드 된다면?
+        const uploadedImageUrl = await uploadAvatar(selectedFile, user.id);
+        if (uploadedImageUrl) {
+          // 실제로 업로드 완료 후 전달받은 URL 문자열을 보관함
+          // profiles 테이블에 avatar_url 에 넣어줄 문자열
+          imgUrl = uploadedImageUrl;
+        } else {
+          alert('이미지 업로드에 실패했습니다. 닉네임만 저장됩니다.');
+        }
+      }
+
+      // 실제로 업데이트 진행 부분
+      const tempUpdateData: ProfileUpdate = { nickname: nickName, avatar_url: imgUrl };
+      const success = await updateProfile(tempUpdateData, user.id);
+      if (!success) {
+        console.log('프로필 업데이트에 실패하였습니다.');
+        return;
+      }
+      // 업데이트 성공 시 초기화 진행
+      setPreviewImage(null);
+      setSelectedFile(null);
+      setImageRemoverRequest(false);
+      setOriginalAvatarUrl(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      await loadProfile();
+      alert('프로필이 성공적으로 업데이트 되었습니다.');
+    } catch (err) {
+      console.log('프로필 업데이트 오류', err);
+    } finally {
+      setUserEdit(false);
+      setUploading(false);
+      setLoading(false);
+    }
+  };
+
+  // 회원탈퇴
+  const handleDeleteUser = () => {
+    const message: string = '계정을 완전히 삭제하시겠습니까? \n\n 복구가 불가능 합니다.';
+    let isConfirm = false;
+    isConfirm = confirm(message);
+
+    if (isConfirm) {
+      deleteAccount();
+    }
+  };
+
+  // 이미지 선택 처리 (미리보기)
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    // 파일 형식 검증
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert(`지원하지 않는 파일 형식입니다. 허용 형식: ${allowedTypes.join(', ')}`);
+      return;
+    }
+
+    // 파일 크기 검증 (5MB 제한)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      alert(`파일 크기가 너무 큽니다. 최대 5MB까지 업로드 가능합니다.`);
+      return;
+    }
+
+    // 미리보기 생성 (파일을 문자열로 변환한 것)
+    const reader = new FileReader();
+    reader.onload = e => {
+      setPreviewImage(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    setSelectedFile(file);
+    // 새 이미지 선택 시 이미지 제거 요청 상태 초기화
+    setImageRemoverRequest(false);
+  };
+
+  // 이미지 파일 선택 취소
+  const handleCancelUpload = () => {
+    setPreviewImage(null);
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // 이미지 파일 제거 처리
+  const handleRemoveImage = () => {
+    const ok = confirm('프로필 이미지를 제거 하시겠습니까?');
+    if (!ok) {
+      return;
+    }
+    // 즉시 제거하지 않음
+    // 제거 하라는 상태만 별도로 관리함
+    setImageRemoverRequest(true);
+    setPreviewImage(null);
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-[999] w-full h-full bg-sky-400 flex items-center justify-center">
+        <h1 className="text-white text-xl font-bold">프로필 로딩중 ...</h1>
+      </div>
+    );
+  }
+  // error 메세지 출력하기
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+        <h2 className="text-2xl font-bold mb-4">프로필</h2>
+        <div className="mb-4 text-red-600">{error}</div>
+        <button
+          onClick={loadProfile}
+          className="px-4 py-2 bg-blue-200 text-white rounded-lg hover:bg-blue-300 transition-colors"
+        >
+          재시도
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto">
+      <h2 className="text-3xl font-bold mb-8 text-blue-700">회원 정보</h2>
+      {/* 사용자 기본 정보 */}
+      <div className="mb-6 p-6 border rounded-lg shadow bg-white">
+        <h3 className="text-xl font-semibold mb-4">기본 정보</h3>
+        <div className="text-gray-700 mb-2">이메일 : {user?.email}</div>
+        <div className="text-gray-700">
+          가입일: {user?.created_at && new Date(user.created_at).toLocaleString()}
+        </div>
+      </div>
+      {/* 사용자 추가 정보 */}
+      <div className="p-6 border rounded-lg shadow bg-white">
+        <h3 className="text-xl font-semibold mb-4">사용자 추가 정보</h3>
+        <div className="text-gray-700 mb-2">아이디 : {profileData?.id}</div>
+        {userEdit ? (
+          <>
+            <div className="mb-4">
+              닉네임 :
+              <input
+                type="text"
+                value={nickName}
+                onChange={e => setNickName(e.target.value)}
+                className="ml-2 px-2 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-400"
+              />
+            </div>
+            <div className="text-gray-700 mb-4">
+              <h4>아바타 편집</h4>
+              <div>
+                {previewImage ? (
+                  <div>
+                    <img src={previewImage} />
+                    <p>새로운 이미지 미리보기</p>
+                  </div>
+                ) : imageRemoverRequest ? (
+                  <div>이미지 제거됨.</div>
+                ) : originalAvatarUrl ? (
+                  <div>
+                    <img src={originalAvatarUrl} />
+                    현재 아바타
+                  </div>
+                ) : (
+                  <div>이미지 없음, 아바타 이미지를 설정 해보세요!</div>
+                )}
+              </div>
+              <div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  style={{ display: 'none' }}
+                />
+              </div>
+              <div>
+                <div>
+                  {/* disabled : 비활성화 */}
+                  <button disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+                    {uploading ? '업로드 중...' : '이미지 선택'}
+                  </button>
+                  {previewImage && (
+                    <button disabled={uploading} onClick={handleCancelUpload}>
+                      취소
+                    </button>
+                  )}
+                  {!previewImage && !imageRemoverRequest && originalAvatarUrl && (
+                    <button onClick={handleRemoveImage}>
+                      {uploading ? '처리 중' : '이미지 제거'}
+                    </button>
+                  )}
+                  {imageRemoverRequest && (
+                    <button
+                      disabled={uploading}
+                      onClick={() => {
+                        setImageRemoverRequest(false);
+                      }}
+                    >
+                      제거 취소
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p>지원 형식 : JPEG, PNG, GIF (최대 5MB)</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-gray-700 mb-4">닉네임 : {profileData?.nickname}</div>
+            <div className="text-gray-700 mb-4">
+              <h4>아바타 : </h4>
+              {profileData?.avatar_url ? (
+                <img src={profileData.avatar_url} className="h-16 w-16 rounded-full mt-2" />
+              ) : (
+                <div>기본 이미지</div>
+              )}
+            </div>
+          </>
+        )}
+        <div className="text-gray-700 mb-4">
+          가입일 : {profileData?.created_at && new Date(profileData.created_at).toLocaleString()}
+        </div>
+      </div>
+      {error && (
+        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
+      <div className="mt-6 flex gap-3">
+        {userEdit ? (
+          <>
+            <button
+              disabled={uploading}
+              onClick={saveProfile}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+            >
+              {uploading ? '저장 중...' : '수정 확인'}
+            </button>
+            <button
+              onClick={() => {
+                setUserEdit(false);
+                setNickName(profileData?.nickname || '');
+                setPreviewImage(null);
+                setSelectedFile(null);
+                setImageRemoverRequest(false);
+                setOriginalAvatarUrl(null);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                }
+              }}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+            >
+              수정 취소
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => {
+                setUserEdit(true);
+                // 편집 시작 시 원본 이미지 URL 저장
+                setOriginalAvatarUrl(profileData?.avatar_url || null);
+                setImageRemoverRequest(false);
+              }}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              정보 수정
+            </button>
+            <button
+              onClick={handleDeleteUser}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+            >
+              회원 탈퇴
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ProfilePage;
+```
