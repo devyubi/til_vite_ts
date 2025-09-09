@@ -146,7 +146,64 @@ const cleanupUserAvatars = async (userId: string): Promise<boolean> => {
 };
 
 // 사용자 프로필 이미지 제거
-const RemoveAvatar = async (): Promise<any> => {};
+const removeAvatar = async (userId: string): Promise<boolean> => {
+  try {
+    // 현재 로그인 한 사용자의 avatar_url 을 읽어와야함
+    // 여기서 파일명을 추출함
+    const profile = await getProfile(userId);
+    // 사용자가 avatar_url 이 없으면
+    if (!profile?.avatar_url) {
+      return true; // 작업 완료
+    }
+    // 1. 만약 avatar_url 이 존재한다면 이름 파악, 파일 삭제
+    let deleteSuccess = false;
+    try {
+      // url 에 파일명을 찾아야함 (url 로 변환하면 path와 파일 구분이 수월함)
+      const url = new URL(profile.avatar_url);
+      const pathParts = url.pathname.split('/');
+      const publicIndex = pathParts.indexOf('public');
+      if (publicIndex !== -1 && publicIndex + 1 < pathParts.length) {
+        const bucketName = pathParts[publicIndex + 1];
+        const filePath = pathParts.slice(publicIndex + 2).join('/');
+        // 실제로 찾아낸 bucketName 과 filePath 로 삭제
+        const { data, error } = await supabase.storage.from(bucketName).remove([filePath]);
+        if (error) {
+          throw new Error('파일을 찾았지만, 삭제에 실패하였습니다.');
+        }
+        // 파일 삭제 성공
+        deleteSuccess = true;
+      }
+    } catch (err) {
+      console.log(err);
+    }
+
+    // 2. 만약 avatar_url 을 제대로 파싱하지 못했다면?
+    if (!deleteSuccess) {
+      try {
+        // 전체 목록을 일단 읽어옴
+        const { data: files, error: listError } = await supabase.storage
+          .from('user-images')
+          .list('avatars', { limit: 1000 });
+        if (!listError && files && files.length > 0) {
+          const userFiles = files.filter(item => item.name.startsWith(`${userId}-`));
+          if (userFiles.length > 0) {
+            const filePath = userFiles.map(item => `avatars/${item.name}`);
+            const { error } = await supabase.storage.from('user-images').remove(filePath);
+            if (!error) {
+              deleteSuccess = true;
+            }
+          }
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    }
+    return true;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
 
 // 내보내기 ( 하나하나 export 넣기 귀찮을 시 )
-export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar };
+export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar, removeAvatar };
