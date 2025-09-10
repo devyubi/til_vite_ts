@@ -84,7 +84,50 @@ export const deleteTodo = async (id: number): Promise<void> => {
 };
 
 // Complited 토글 = 어차피 toggle도 업데이트기 때문에 굳이 만들지 않아도 되지만 수업상 만듦
-
 export const toggleTodo = async (id: number, completed: boolean): Promise<Todo | null> => {
   return updateTodo(id, { completed });
+};
+
+type PaginatedTodos = {
+  todos: Todo[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+};
+
+// 페이지 단위로 조각내서 목록 출력하기
+// getTodosPaginated (페이지 번호, 10개)
+// getTodosPaginated (1, 10개)
+// getTodosPaginated (2, 10개)
+export const getTodosPaginated = async (
+  page: number = 1,
+  limit: number = 10,
+): Promise<{ todos: Todo[]; totalCount: number; totalPages: number; currentPage: number }> => {
+  // 시작 지점 ( 만약 page = 2 라면, limit 은 10 )
+  // (2-1)*10 = 10
+  const from = (page - 1) * limit;
+  // 제한 지점 (종료)
+  // 10 + 10 - 1 = 19
+  const to = from + limit - 1;
+
+  // 전체 데이터 개수 (행row의 개수)
+  const { count } = await supabase.from('todos').select('*', { count: 'exact', head: true });
+
+  // from 부터 to 까지의 상세 데이터 가져오기
+  const { data } = await supabase
+    .from('todos')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  // 편하게 활용하기
+  const totalCount = count || 0;
+  // 몇 페이지인지 계산 (소수점은 올림)
+  const totalPages = Math.ceil(totalCount / limit);
+  return {
+    todos: data || [],
+    totalCount,
+    totalPages,
+    currentPage: page,
+  };
 };

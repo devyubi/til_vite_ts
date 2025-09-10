@@ -14,9 +14,9 @@ const TodoList = ({}: TodoListProps) => {
         {todos.length === 0 ? (
           <li className="p-4 text-gray-500 text-center">할 일이 없습니다.</li>
         ) : (
-          todos.map((item: Todo) => (
+          todos.map((item: Todo, index: number) => (
             <li key={item.id} className="p-4 hover:bg-gray-50 transition">
-              <TodoItem todo={item} />
+              <TodoItem todo={item} key={item.id} index={index} />
             </li>
           ))
         )}

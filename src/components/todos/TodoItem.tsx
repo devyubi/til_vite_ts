@@ -10,10 +10,13 @@ import {
 
 type TodoItemProps = {
   todo: Todo;
+  index: number;
 };
 
-const TodoItem = ({ todo }: TodoItemProps) => {
-  const { toggleTodo, editTodo, deleteTodo } = useTodos();
+const TodoItem = ({ todo, index }: TodoItemProps) => {
+  const { toggleTodo, editTodo, deleteTodo, currentPage, itemsPerPage, totalCount } = useTodos();
+  // 순서 번호 매기기
+  const globalIndex = totalCount - ((currentPage - 1) * itemsPerPage + index);
 
   // 수정중인지
   const [isEdit, setIsEdit] = useState(false);
@@ -79,6 +82,7 @@ const TodoItem = ({ todo }: TodoItemProps) => {
 
   return (
     <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition">
+      {globalIndex}
       {isEdit ? (
         <div className="flex items-center space-x-2 w-full">
           <input
