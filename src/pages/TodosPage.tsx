@@ -24,7 +24,8 @@ const TodosContent = ({
   return (
     <div>
       <div>
-        <TodoWrite />
+        {/* 새 글 등록 시 1 페이지로 이동 후 목록 새로고침 */}
+        <TodoWrite handleChangePage={handleChangePage} />
       </div>
       <div>
         <TodoList />

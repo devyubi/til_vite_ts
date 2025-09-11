@@ -82,7 +82,8 @@ const TodoItem = ({ todo, index }: TodoItemProps) => {
 
   return (
     <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition">
-      {globalIndex}
+      {/* 출력 번호 */}
+      <span>{globalIndex}</span>
       {isEdit ? (
         <div className="flex items-center space-x-2 w-full">
           <input
