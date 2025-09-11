@@ -88,13 +88,6 @@ export const toggleTodo = async (id: number, completed: boolean): Promise<Todo |
   return updateTodo(id, { completed });
 };
 
-type PaginatedTodos = {
-  todos: Todo[];
-  totalCount: number;
-  totalPages: number;
-  currentPage: number;
-};
-
 // 페이지 단위로 조각내서 목록 출력하기
 // getTodosPaginated (페이지 번호, 10개)
 // getTodosPaginated (1, 10개)
@@ -130,4 +123,46 @@ export const getTodosPaginated = async (
     totalPages,
     currentPage: page,
   };
+};
+
+// 무한 스크롤 todo 목록 조회
+export const getTodosInfinity = async (
+  offset: number = 0,
+  limit: number = 5,
+): Promise<{ todos: Todo[]; hasMore: boolean; totalCount: number }> => {
+  try {
+    // 전체 todos 의 Row 개수
+    const { count, error: countError } = await supabase
+      .from('todos')
+      .select('*', { count: 'exact', head: true });
+    if (countError) {
+      throw new Error(`getTodosInfinity count 오류 : ${countError.message}`);
+    }
+
+    // 무한 스크롤 데이터 조회
+    const { data, error: limitError } = await supabase
+      .from('todos')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (limitError) {
+      throw new Error(`getTodosInfinite limit 오류 : ${limitError.message}`);
+    }
+    // 전체 개수
+    const totalCount = count || 0;
+
+    // 앞으로 더 가져올 데이터가 있는지?
+    const hasMore = offset + limit < totalCount;
+
+    // 최종 값을 리턴함
+    return {
+      todos: data || [],
+      hasMore,
+      totalCount,
+    };
+  } catch (error) {
+    console.log(`getTodosInfinite 오류 : ${error}`);
+    throw new Error(`getTodosInfinite 오류 : ${error}`);
+  }
 };

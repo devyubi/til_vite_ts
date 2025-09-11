@@ -8,6 +8,7 @@ import Protected from './contexts/Protected';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProfilePage from './pages/ProfilePage';
 import AdminPage from './pages/AdminPage';
+import TodosInfinityPage from './pages/TodosInfinityPage';
 
 const TopBar = () => {
   const { signOut, user } = useAuth();
@@ -27,6 +28,9 @@ const TopBar = () => {
           <>
             <Link to="/todos" className="hover:text-blue-900 transition-colors">
               할 일
+            </Link>
+            <Link to="/todos-infinity" className="hover:text-blue-900 transition-colors">
+              무한 스크롤 할 일
             </Link>
             <Link to="/profile" className="hover:text-blue-900 transition-colors">
               내 프로필
@@ -68,6 +72,14 @@ function App() {
               element={
                 <Protected>
                   <TodosPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/todos-infinity"
+              element={
+                <Protected>
+                  <TodosInfinityPage />
                 </Protected>
               }
             />
