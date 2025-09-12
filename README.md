@@ -1562,3 +1562,15 @@ const options = {
 
 const observer = new IntersectionObserver(callback, options);
 ```
+
+## 7. 무한 스크롤 구현
+
+- https://www.npmjs.com/package/react-infinite-scroll-component
+- https://blog.itcode.dev/posts/2024/07/22/react-component-infinite-scroll
+- https://goddino.tistory.com/entry/react-react-infinite-scroll-component-%EC%82%AC%EC%9A%A9%EB%B2%95-ft-%EB%AC%B4%ED%95%9C-%EC%8A%A4%ED%81%AC%EB%A1%A4
+
+### 7.1. npm 설치
+
+```bash
+npm i react-infinite-scroll-component
+```

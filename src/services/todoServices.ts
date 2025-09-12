@@ -126,7 +126,7 @@ export const getTodosPaginated = async (
 };
 
 // 무한 스크롤 todo 목록 조회
-export const getTodosInfinity = async (
+export const getTodosInfinite = async (
   offset: number = 0,
   limit: number = 5,
 ): Promise<{ todos: Todo[]; hasMore: boolean; totalCount: number }> => {
@@ -136,7 +136,7 @@ export const getTodosInfinity = async (
       .from('todos')
       .select('*', { count: 'exact', head: true });
     if (countError) {
-      throw new Error(`getTodosInfinity count 오류 : ${countError.message}`);
+      throw new Error(`getTodosInfinite count 오류 : ${countError.message}`);
     }
 
     // 무한 스크롤 데이터 조회

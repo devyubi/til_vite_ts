@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { InfinityScrollProvider, useInfinityScroll } from '../contexts/InfinityScrollContext';
 import type { Profile } from '../types/todoType';
 import { getProfile } from '../lib/profile';
+import InfiniteScroll from 'react-infinite-scroll-component';
+import { InfiniteScrollProvider, useInfiniteScroll } from '../contexts/InfinityScrollContext';
 
 // 용서하세요. 입력창 컴포넌트임다 컴포넌트라 const
-const InfinityTodoWrite = () => {
-  const { addTodo, loadingInitialTodos } = useInfinityScroll();
+const InfiniteTodoWrite = () => {
+  const { addTodo, loadingInitialTodos } = useInfiniteScroll();
 
   const [title, setTitle] = useState('');
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +54,7 @@ const InfinityTodoWrite = () => {
 };
 
 // 용서하세요..ㅋㅋ 목록 컴포넌트
-const InfinityTodoList = () => {
+const InfiniteTodoList = () => {
   const {
     loading,
     loadingMore,
@@ -65,7 +66,7 @@ const InfinityTodoList = () => {
     toggleTodo,
     deleteTodo,
     loadingInitialTodos,
-  } = useInfinityScroll();
+  } = useInfiniteScroll();
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -79,88 +80,6 @@ const InfinityTodoList = () => {
     };
     loadProifle();
   }, [user?.id]);
-
-  // IntersectionObserver 를 이용한 무한 스크롤
-
-  // 1. IntersectionObserver 를 저장하는 ref
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  // 2. 목록 더보기 할 때 보여줄 로딩 창
-  const loadingRef = useRef<HTMLDivElement | null>(null);
-  // 3. 연속 로딩 방지를 위한 타이머 ref
-  const debounceTimerRef = useRef<any>(null);
-  // 4. 데이터 로드 스크롤 바 하단에 위치 문제로 연속 호출 되는 부분 제어
-  const [isInCooldown, setIsInCooldown] = useState(false);
-  const cooldownTimerRef = useRef<any>(null);
-
-  useEffect(() => {
-    // 화면에서 사라질 때 메모리 정리 : 클린업 함수
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      if (cooldownTimerRef.current) {
-        clearTimeout(cooldownTimerRef.current);
-      }
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, []);
-
-  // 연속 로딩 방지
-  useEffect(() => {
-    if (loadingMore) {
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-    } else {
-      // observerRef 를 비활성화 하기 위해서
-      setIsInCooldown(true);
-      cooldownTimerRef.current = setTimeout(() => {
-        setIsInCooldown(false);
-      }, 1000);
-    }
-  }, [loadingMore]);
-
-  /**
-   * 목록에 마지막 요소를 등록할 것임.
-   * 목록의 마지막 요소가 화면에 들어오면 isIntersecting 을 true 로 바꿈
-   * 아직 더 불러올 데이터가 있으면 loadMore 을 실행하고 ==> 데이터를 추가함
-   * 새로운 목록이 랜더링 되면 새로운 마지막 요소에 다시 옵저버를 붙임
-   * 위의 과정을 반복해서 ==> 데이터의 끝까지 반복함
-   */
-
-  // 마지막 todo 항목이 화면에 보이면 자동으로 다음 데이터를 불러들이는 함수
-  // 여기서는 useCallback 을 사용합니다.
-  //  - 함수가 리랜더링 될 때마다 새롭게 만들면 성능 이슈가 있음
-  //  - 함수가 새로 만들어져야 하는 경우는 의존성 배열에 추가하겠다
-  // 의존성 배열에는 loadingMore, hasMore, loadMoreTodos 변경될 때
-
-  const lastTodoElementRef = useCallback(
-    (node: HTMLElement | null) => {
-      if (observerRef.current) observerRef.current.disconnect();
-      if (loadingMore || !hasMore || !node || isInCooldown) return;
-
-      observerRef.current = new IntersectionObserver(
-        entries => {
-          if (entries[0].isIntersecting && hasMore && !loadingMore && !isInCooldown) {
-            if (debounceTimerRef.current) {
-              clearTimeout(debounceTimerRef.current);
-            }
-            debounceTimerRef.current = setTimeout(() => {
-              if (!loadingMore && hasMore && !isInCooldown) {
-                loadMoreTodos();
-              }
-            }, 500);
-          }
-        },
-        {
-          threshold: 0.8,
-        },
-      );
-
-      observerRef.current.observe(node);
-    },
-    [loadingMore, hasMore, loadMoreTodos, isInCooldown],
-  );
 
   // 번호 계산 함수 (최신글이 높은 번호를 가지도록)
   const getGlobalIndex = (index: number) => {
@@ -251,11 +170,17 @@ const InfinityTodoList = () => {
       {todos.length === 0 ? (
         <p>등록된 할 일이 없습니다.</p>
       ) : (
-        <div>
+        // 무한 스크롤 라이브러리 적용
+        <InfiniteScroll
+          dataLength={todos.length}
+          next={loadMoreTodos}
+          hasMore={hasMore}
+          loader={<div>데이터를 불러오는 중...</div>}
+          endMessage={<div>모든 데이터를 불러왔습니다.</div>}
+        >
           <ul>
             {todos.map((item, index) => (
-              // 마지막 요소 태그인지를 연결함. (마지막 배열의 index 인지 비교하면 됨.)
-              <li key={item.id} ref={index === todos.length - 1 ? lastTodoElementRef : null}>
+              <li key={item.id}>
                 {/* 번호 표시 */}
                 <span>{getGlobalIndex(index)}</span>
                 {/* 체크 박스 */}
@@ -310,39 +235,28 @@ const InfinityTodoList = () => {
               </li>
             ))}
           </ul>
-        </div>
-      )}
-      {/* 무한 목록 로딩용 인디케이터 */}
-      {loadingMore && (
-        <div ref={loadingRef} style={{ color: 'red', fontSize: '30px' }}>
-          더 많은 할 일을 불러오는 중...
-        </div>
-      )}
-
-      {/* 더이상 로드할 데이터가 없을 때 */}
-      {todos.length > 0 && !hasMore && (
-        <div style={{ color: 'red', fontSize: '30px' }}>모든 데이터를 불러왔습니다.</div>
+        </InfiniteScroll>
       )}
     </div>
   );
 };
 
-function TodosInfinityPage() {
+function TodosInfinitePage() {
   return (
     <div>
-      <InfinityScrollProvider itemsPerPage={10}>
+      <InfiniteScrollProvider itemsPerPage={15}>
         <div>
           <h1>무한 스크롤 Todo 목록</h1>
           <div>
-            <InfinityTodoWrite />
+            <InfiniteTodoWrite />
           </div>
           <div>
-            <InfinityTodoList />
+            <InfiniteTodoList />
           </div>
         </div>
-      </InfinityScrollProvider>
+      </InfiniteScrollProvider>
     </div>
   );
 }
 
-export default TodosInfinityPage;
+export default TodosInfinitePage;
