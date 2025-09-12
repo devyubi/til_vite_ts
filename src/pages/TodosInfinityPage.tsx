@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { InfinityScrollProvider, useInfinityScroll } from '../contexts/InfinityScrollContext';
 import type { Profile } from '../types/todoType';
@@ -6,12 +6,66 @@ import { getProfile } from '../lib/profile';
 
 // 용서하세요. 입력창 컴포넌트임다 컴포넌트라 const
 const InfinityTodoWrite = () => {
-  return <div>입력창</div>;
+  const { addTodo, loadingInitialTodos } = useInfinityScroll();
+
+  const [title, setTitle] = useState('');
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.target.value);
+  };
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    }
+  };
+  const handleSave = async (): Promise<void> => {
+    if (!title.trim()) {
+      alert('제목을 입력하세요');
+      return;
+    }
+    try {
+      // 새 할 일 추가
+      await addTodo(title);
+      // 다시 데이터를 로딩함
+      await loadingInitialTodos();
+      setTitle('');
+    } catch (error) {
+      console.log('등록에 오류가 발생 : ', error);
+      alert(`등록에 오류가 발생 : ${error}`);
+    }
+  };
+
+  return (
+    <div>
+      <h2>할 일 작성</h2>
+      <div>
+        <input
+          type="text"
+          value={title}
+          onChange={e => handleChange(e)}
+          onKeyDown={e => handleKeyDown(e)}
+          placeholder="할 일을 입력 해주세요."
+          className="border"
+        />
+        <button onClick={handleSave}>등록</button>
+      </div>
+    </div>
+  );
 };
 
 // 용서하세요..ㅋㅋ 목록 컴포넌트
 const InfinityTodoList = () => {
-  const { loading, todos, totalCount, editTodo, toggleTodo, deleteTodo } = useInfinityScroll();
+  const {
+    loading,
+    loadingMore,
+    loadMoreTodos,
+    hasMore,
+    todos,
+    totalCount,
+    editTodo,
+    toggleTodo,
+    deleteTodo,
+    loadingInitialTodos,
+  } = useInfinityScroll();
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -26,13 +80,92 @@ const InfinityTodoList = () => {
     loadProifle();
   }, [user?.id]);
 
+  // IntersectionObserver 를 이용한 무한 스크롤
+
+  // 1. IntersectionObserver 를 저장하는 ref
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  // 2. 목록 더보기 할 때 보여줄 로딩 창
+  const loadingRef = useRef<HTMLDivElement | null>(null);
+  // 3. 연속 로딩 방지를 위한 타이머 ref
+  const debounceTimerRef = useRef<any>(null);
+  // 4. 데이터 로드 스크롤 바 하단에 위치 문제로 연속 호출 되는 부분 제어
+  const [isInCooldown, setIsInCooldown] = useState(false);
+  const cooldownTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    // 화면에서 사라질 때 메모리 정리 : 클린업 함수
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current);
+      }
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // 연속 로딩 방지
+  useEffect(() => {
+    if (loadingMore) {
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    } else {
+      // observerRef 를 비활성화 하기 위해서
+      setIsInCooldown(true);
+      cooldownTimerRef.current = setTimeout(() => {
+        setIsInCooldown(false);
+      }, 1000);
+    }
+  }, [loadingMore]);
+
+  /**
+   * 목록에 마지막 요소를 등록할 것임.
+   * 목록의 마지막 요소가 화면에 들어오면 isIntersecting 을 true 로 바꿈
+   * 아직 더 불러올 데이터가 있으면 loadMore 을 실행하고 ==> 데이터를 추가함
+   * 새로운 목록이 랜더링 되면 새로운 마지막 요소에 다시 옵저버를 붙임
+   * 위의 과정을 반복해서 ==> 데이터의 끝까지 반복함
+   */
+
+  // 마지막 todo 항목이 화면에 보이면 자동으로 다음 데이터를 불러들이는 함수
+  // 여기서는 useCallback 을 사용합니다.
+  //  - 함수가 리랜더링 될 때마다 새롭게 만들면 성능 이슈가 있음
+  //  - 함수가 새로 만들어져야 하는 경우는 의존성 배열에 추가하겠다
+  // 의존성 배열에는 loadingMore, hasMore, loadMoreTodos 변경될 때
+
+  const lastTodoElementRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (loadingMore || !hasMore || !node || isInCooldown) return;
+
+      observerRef.current = new IntersectionObserver(
+        entries => {
+          if (entries[0].isIntersecting && hasMore && !loadingMore && !isInCooldown) {
+            if (debounceTimerRef.current) {
+              clearTimeout(debounceTimerRef.current);
+            }
+            debounceTimerRef.current = setTimeout(() => {
+              if (!loadingMore && hasMore && !isInCooldown) {
+                loadMoreTodos();
+              }
+            }, 500);
+          }
+        },
+        {
+          threshold: 0.8,
+        },
+      );
+
+      observerRef.current.observe(node);
+    },
+    [loadingMore, hasMore, loadMoreTodos, isInCooldown],
+  );
+
   // 번호 계산 함수 (최신글이 높은 번호를 가지도록)
   const getGlobalIndex = (index: number) => {
     // 무한 스크롤 시에 계산해서 번호 출력
     const globalIndex = totalCount - index;
-    console.log(
-      `번호 계산 - index : ${index}, totalCount : ${totalCount}, globalIndex: ${globalIndex}`,
-    );
     return globalIndex;
   };
 
@@ -81,6 +214,32 @@ const InfinityTodoList = () => {
     }
   };
 
+  // 토글
+  const handleToggle = async (id: number) => {
+    try {
+      // Context 의 state 를 업데이트함
+      await toggleTodo(id);
+    } catch (error) {
+      console.log('토글 실패 :', error);
+      alert('상태 변경에 실패하였습니다.');
+    }
+  };
+
+  // 삭제
+  const handleDelete = async (id: number) => {
+    if (window.confirm('정말 삭제하시겠습니까?')) {
+      try {
+        // id 를 삭제
+        await deleteTodo(id);
+        // 삭제 이후 번호를 갱신해서 정리해줌
+        await loadingInitialTodos();
+      } catch (error) {
+        console.log('삭제에 실패하였습니다.');
+        alert('삭제에 실패하였습니다.');
+      }
+    }
+  };
+
   if (loading) {
     return <div>데이터 로딩중...</div>;
   }
@@ -88,63 +247,82 @@ const InfinityTodoList = () => {
     <div>
       <h3>
         TodoList (무한스크롤){profile?.nickname && <span>{profile.nickname} 님의 할 일</span>}
-        {todos.length === 0 ? (
-          <p>등록된 할 일이 없습니다.</p>
-        ) : (
-          <div>
-            <ul>
-              {todos.map((item, index) => (
-                <li key={item.id}>
-                  {/* 번호 표시 */}
-                  <span>{getGlobalIndex(index)}</span>
-                  {/* 체크 박스 */}
-                  <input type="checkbox" checked={item.completed} className="border" />
-                  {/* 제목과 날짜 출력 */}
-                  <div>
-                    {editingId === item.id ? (
-                      <input
-                        className="border"
-                        type="text"
-                        value={editingTitle}
-                        onChange={e => setEditingTitle(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            handleEditSave(item.id);
-                          } else if (e.key === 'Escape') {
-                            handleEditCancel();
-                          }
-                        }}
-                      />
-                    ) : (
-                      <span>{item.title}</span>
-                    )}
-
-                    <span>작성일 : {formatDate(item.created_at)}</span>
-                  </div>
-                  {/* 버튼들 */}
-                  {editingId === item.id ? (
-                    <>
-                      <button onClick={() => handleEditSave(item.id)} className="border">
-                        저장
-                      </button>
-                      <button onClick={handleEditCancel} className="border">
-                        취소
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => handleEditStart(item)} className="border">
-                        수정
-                      </button>
-                      <button className="border">삭제</button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </h3>
+      {todos.length === 0 ? (
+        <p>등록된 할 일이 없습니다.</p>
+      ) : (
+        <div>
+          <ul>
+            {todos.map((item, index) => (
+              // 마지막 요소 태그인지를 연결함. (마지막 배열의 index 인지 비교하면 됨.)
+              <li key={item.id} ref={index === todos.length - 1 ? lastTodoElementRef : null}>
+                {/* 번호 표시 */}
+                <span>{getGlobalIndex(index)}</span>
+                {/* 체크 박스 */}
+                <input
+                  type="checkbox"
+                  checked={item.completed}
+                  className="border"
+                  onChange={() => handleToggle(item.id)}
+                />
+                {/* 제목과 날짜 출력 */}
+                <div>
+                  {editingId === item.id ? (
+                    <input
+                      className="border"
+                      type="text"
+                      value={editingTitle}
+                      onChange={e => setEditingTitle(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleEditSave(item.id);
+                        } else if (e.key === 'Escape') {
+                          handleEditCancel();
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span>{item.title}</span>
+                  )}
+
+                  <span>작성일 : {formatDate(item.created_at)}</span>
+                </div>
+                {/* 버튼들 */}
+                {editingId === item.id ? (
+                  <>
+                    <button onClick={() => handleEditSave(item.id)} className="border">
+                      저장
+                    </button>
+                    <button onClick={handleEditCancel} className="border">
+                      취소
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => handleEditStart(item)} className="border">
+                      수정
+                    </button>
+                    <button className="border" onClick={() => handleDelete(item.id)}>
+                      삭제
+                    </button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* 무한 목록 로딩용 인디케이터 */}
+      {loadingMore && (
+        <div ref={loadingRef} style={{ color: 'red', fontSize: '30px' }}>
+          더 많은 할 일을 불러오는 중...
+        </div>
+      )}
+
+      {/* 더이상 로드할 데이터가 없을 때 */}
+      {todos.length > 0 && !hasMore && (
+        <div style={{ color: 'red', fontSize: '30px' }}>모든 데이터를 불러왔습니다.</div>
+      )}
     </div>
   );
 };
@@ -152,7 +330,7 @@ const InfinityTodoList = () => {
 function TodosInfinityPage() {
   return (
     <div>
-      <InfinityScrollProvider itemsPerPage={5}>
+      <InfinityScrollProvider itemsPerPage={10}>
         <div>
           <h1>무한 스크롤 Todo 목록</h1>
           <div>

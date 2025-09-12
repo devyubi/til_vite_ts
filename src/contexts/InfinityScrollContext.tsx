@@ -7,7 +7,14 @@ import {
   type PropsWithChildren,
 } from 'react';
 import type { Todo } from '../types/todoType';
-import { getTodosInfinity } from '../services/todoServices';
+import {
+  getTodosInfinity,
+  updateTodo,
+  deleteTodo as updateDeletedServiceTodo,
+  toggleTodo as updateServiceToggTodo,
+  createTodo,
+} from '../services/todoServices';
+import { supabase } from '../lib/supabase';
 
 // 1. 초기값
 type InfinityScrollState = {
@@ -146,10 +153,10 @@ type InfinityScrollContextValue = {
   loadingMore: boolean;
   loadingInitialTodos: () => Promise<void>;
   loadMoreTodos: () => Promise<void>;
-  addTodo: (todo: Todo) => void;
-  toggleTodo: (id: number) => void;
-  deleteTodo: (id: number) => void;
-  editTodo: (id: number, title: string) => void;
+  addTodo: (title: string) => Promise<void>;
+  toggleTodo: (id: number) => Promise<void>;
+  deleteTodo: (id: number) => Promise<void>;
+  editTodo: (id: number, title: string) => Promise<void>;
   reset: () => void;
 };
 const InfinityScrollContext = createContext<InfinityScrollContextValue | null>(null);
@@ -222,20 +229,62 @@ export const InfinityScrollProvider: React.FC<InfinityScrollProviderProps> = ({
   };
 
   // Todo 추가
-  const addTodo = (todo: Todo): void => {
-    dispatch({ type: InfinityScrollActionType.ADD_TODO, payload: { todo } });
+  const addTodo = async (title: string): Promise<void> => {
+    try {
+      const result = await createTodo({ title });
+      if (!result) {
+        console.log('글 등록에 실패 하였습니다.');
+        return;
+      }
+      // DB 업데이트 후 State 업데이트
+      dispatch({ type: InfinityScrollActionType.ADD_TODO, payload: { todo: result } });
+    } catch (error) {
+      console.log(`새 Todo 등록 오류 : ${error}`);
+    }
   };
   // Todo 토글
-  const toggleTodo = (id: number): void => {
-    dispatch({ type: InfinityScrollActionType.TOGGLE_TODO, payload: { id } });
+  const toggleTodo = async (id: number): Promise<void> => {
+    try {
+      // 현재 전달 된 id 에 해당하는 todo 항목의 completed 를 파악한다.
+      const currentTodo = state.todos.find(item => item.id === id);
+      if (!currentTodo) {
+        console.log('Todo 를 찾지 못했습니다. :', id);
+        return;
+      }
+      const result = await updateServiceToggTodo(id, !currentTodo.completed);
+      if (result) {
+        // DB 업데이트 후 state 업데이트
+        dispatch({ type: InfinityScrollActionType.TOGGLE_TODO, payload: { id } });
+      } else {
+        console.log('할 일 상태 업데이트 실패');
+      }
+    } catch (error) {
+      console.log(`상태 변경 오류 : ${error}`);
+    }
   };
   // Todo 삭제
-  const deleteTodo = (id: number): void => {
-    dispatch({ type: InfinityScrollActionType.DELETE_TODO, payload: { id } });
+  const deleteTodo = async (id: number): Promise<void> => {
+    try {
+      await updateDeletedServiceTodo(id);
+      // DB 업데이트 후 state 처리
+      dispatch({ type: InfinityScrollActionType.DELETE_TODO, payload: { id } });
+    } catch (error) {
+      console.log(`삭제 오류 : ${error}`);
+    }
   };
   // Todo 수정
-  const editTodo = (id: number, title: string): void => {
-    dispatch({ type: InfinityScrollActionType.EDIT_TODO, payload: { id, title } });
+  const editTodo = async (id: number, title: string): Promise<void> => {
+    try {
+      const updatedTodo = await updateTodo(id, { title });
+      if (updatedTodo) {
+        // 아래는 그냥 state 만 업데이트함. (실제 DB에 업데이트 하고 => state 업데이트 과정이 필요함.)
+        dispatch({ type: InfinityScrollActionType.EDIT_TODO, payload: { id, title } });
+      } else {
+        console.log('업데이트에 실패하였습니다.');
+      }
+    } catch (error) {
+      console.log(`업데이트 오류 : ${error}`);
+    }
   };
   // Context 상태 초기화
   const reset = (): void => {
