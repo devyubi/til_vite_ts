@@ -7,6 +7,7 @@ import {
   toggleTodo as toggleTodoService,
   deleteTodo as deleteTodoService,
 } from '../../services/todoServices';
+import { motion } from 'framer-motion';
 
 type TodoItemProps = {
   todo: Todo;
@@ -81,61 +82,69 @@ const TodoItem = ({ todo, index }: TodoItemProps) => {
   };
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded transition">
+    <motion.div
+      className="group grid grid-cols-[3rem_1fr_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-neutral-50"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+    >
       {/* 출력 번호 */}
-      <span>{globalIndex}</span>
+      <span className="select-none text-center text-sm font-medium text-neutral-500 tabular-nums">
+        {globalIndex}
+      </span>
+
       {isEdit ? (
-        <div className="flex items-center space-x-2 w-full">
+        <div className="col-span-2 flex w-full items-center gap-2">
           <input
             type="text"
             value={editTitle}
             onChange={e => handleChangeTitle(e)}
             onKeyDown={e => handleKeyDown(e)}
-            className="flex-grow border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-[15px] text-neutral-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
           />
           <button
             onClick={handleEditSave}
-            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             저장
           </button>
           <button
             onClick={handleEditCancel}
-            className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition"
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-300"
           >
             취소
           </button>
         </div>
       ) : (
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-2">
+        <>
+          <div className="flex items-center gap-3">
             <input
               type="checkbox"
               checked={todo.completed}
               onChange={handleToggle}
-              className="h-4 w-4 text-blue-500"
+              className="h-5 w-5 rounded border-neutral-300 accent-blue-600"
             />
-            <span className={`${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+            <span className={todo.completed ? 'text-neutral-400 line-through' : 'text-neutral-900'}>
               {todo.title}
             </span>
           </div>
-          <div className="flex space-x-2">
+          <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setIsEdit(true)}
-              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-300"
             >
               수정
             </button>
             <button
               onClick={handleDelete}
-              className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300"
             >
               삭제
             </button>
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </motion.div>
   );
 };
 

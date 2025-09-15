@@ -1,8 +1,8 @@
+import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { createProfile } from '../lib/profile';
-import type { ProfileInsert } from '../types/todoType';
 
 function SignUpPage() {
   const { signUp } = useAuth();
@@ -13,6 +13,7 @@ function SignUpPage() {
   // 추가 정보 ( 닉네임 )
   const [nickName, setNickName] = useState<string>('');
   const [msg, setMsg] = useState<string>('');
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); // 해당 코드 필수 : 웹브라우저 갱신 막아주기
@@ -56,23 +57,31 @@ function SignUpPage() {
       setMsg(
         '회원 가입이 성공했습니다. 이메일을 확인해주세요. 인증 완료 후 프로필이 자동으로 생성됩니다.',
       );
+      // 회원가입 성공 시 로그인 페이지로 이동
+      navigate('/signin');
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white w-full max-w-md p-8 rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold text-center text-blue-600 mb-6">
+    <div className="min-h-screen bg-neutral-50 px-4 flex items-center justify-center">
+      <motion.div
+        className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 220, damping: 20 }}
+      >
+        <h2 className="mb-6 text-center text-2xl font-bold tracking-tight text-neutral-900">
           Todo Service 회원 가입
         </h2>
-        <div className="border rounded-lg p-6">
+        <div className="rounded-xl border border-neutral-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="이메일"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              autoComplete="email"
+              className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
             />
             {/* <button type="button">이메일 중복 확인</button> */}
             <input
@@ -80,32 +89,34 @@ function SignUpPage() {
               value={pw}
               onChange={e => setPw(e.target.value)}
               placeholder="비밀번호"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              autoComplete="new-password"
+              className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
             />
             <input
               type="text"
               value={nickName}
               onChange={e => setNickName(e.target.value)}
               placeholder="닉네임"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
             />
             {/* form 안에선 button type 지정해주기 */}
             <button
               type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+              className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               회원가입
             </button>
           </form>
           <p
-            className={`mt-4 text-sm text-center ${
-              msg.includes('성공') ? 'text-green-600' : 'text-red-500'
+            className={`mt-4 text-center text-sm ${
+              msg.includes('성공') ? 'text-green-600' : 'text-red-600'
             }`}
+            aria-live="polite"
           >
             {msg}
           </p>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

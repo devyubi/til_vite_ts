@@ -1,30 +1,29 @@
 import React from 'react';
 import { useShop } from '../../features';
+import { motion } from 'framer-motion';
 
 const Wallet = () => {
   const { balance } = useShop();
 
   return (
-    <div
-      className="
-      p-6 
-      bg-gradient-to-tr from-white/95 via-white/90 to-sky-100/30 
-      border border-gray-200 
-      rounded-xl 
-      shadow-md
-      backdrop-blur-sm
-    "
+    <motion.div
+      className="mx-auto max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 18 }}
     >
       {/* 상단 */}
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-gray-800">내 지갑</h2>
-        <span className="text-sm text-gray-400">💳 Wallet</span>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-neutral-900">내 지갑</h2>
+        <span className="rounded-full border border-neutral-200 px-2.5 py-1 text-xs text-neutral-600">
+          Wallet
+        </span>
       </div>
 
       {/* 잔액 */}
-      <p className="text-sm text-gray-500">사용 가능한 잔액</p>
-      <p className="mt-1 text-2xl font-baold text-gray-900">{balance.toLocaleString()} 원</p>
-    </div>
+      <p className="text-sm text-neutral-600">사용 가능한 잔액</p>
+      <p className="mt-1 text-2xl font-bold text-neutral-900">{balance.toLocaleString()} 원</p>
+    </motion.div>
   );
 };
 

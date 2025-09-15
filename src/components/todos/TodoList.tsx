@@ -8,7 +8,7 @@ const TodoList = ({}: TodoListProps) => {
   const { todos } = useTodos();
 
   return (
-    <div className="max-w-2xl mx-auto mt-8 px-4">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <h2 className="text-2xl font-bold text-blue-600 mb-4">Todo List</h2>
       <ul className="bg-white shadow-md rounded-lg divide-y divide-gray-200">
         {todos.length === 0 ? (

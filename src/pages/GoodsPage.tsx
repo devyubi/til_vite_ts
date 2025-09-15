@@ -1,4 +1,3 @@
-import React from 'react';
 import GoodList from '../components/shop/GoodList';
 
 function GoodsPage() {

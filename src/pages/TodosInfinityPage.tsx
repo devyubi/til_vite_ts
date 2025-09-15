@@ -4,6 +4,7 @@ import type { Profile } from '../types/todoType';
 import { getProfile } from '../lib/profile';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { InfiniteScrollProvider, useInfiniteScroll } from '../contexts/InfinityScrollContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // 용서하세요. 입력창 컴포넌트임다 컴포넌트라 const
 const InfiniteTodoWrite = () => {
@@ -36,20 +37,30 @@ const InfiniteTodoWrite = () => {
   };
 
   return (
-    <div>
-      <h2>할 일 작성</h2>
-      <div>
+    <motion.div
+      className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 180, damping: 18 }}
+    >
+      <h2 className="mb-3 text-lg font-semibold text-neutral-900">할 일 작성</h2>
+      <div className="flex gap-2">
         <input
           type="text"
           value={title}
           onChange={e => handleChange(e)}
           onKeyDown={e => handleKeyDown(e)}
           placeholder="할 일을 입력 해주세요."
-          className="border"
+          className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
         />
-        <button onClick={handleSave}>등록</button>
+        <button
+          onClick={handleSave}
+          className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          등록
+        </button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -160,80 +171,139 @@ const InfiniteTodoList = () => {
   };
 
   if (loading) {
-    return <div>데이터 로딩중...</div>;
+    return (
+      <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-600 shadow-sm">
+        데이터 로딩중...
+      </div>
+    );
   }
   return (
-    <div>
-      <h3>
-        TodoList (무한스크롤){profile?.nickname && <span>{profile.nickname} 님의 할 일</span>}
-      </h3>
+    <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
+        <h3 className="text-base font-semibold text-neutral-900">
+          TodoList (무한스크롤)
+          {profile?.nickname && (
+            <span className="ml-2 align-middle text-sm font-normal text-neutral-500">
+              {profile.nickname} 님의 할 일
+            </span>
+          )}
+        </h3>
+        {totalCount > 0 && (
+          <span className="rounded-full border border-neutral-200 px-3 py-1 text-xs text-neutral-600">
+            총 {totalCount}개
+          </span>
+        )}
+      </div>
       {todos.length === 0 ? (
-        <p>등록된 할 일이 없습니다.</p>
+        <p className="px-5 py-8 text-sm text-neutral-600">등록된 할 일이 없습니다.</p>
       ) : (
         // 무한 스크롤 라이브러리 적용
         <InfiniteScroll
           dataLength={todos.length}
           next={loadMoreTodos}
           hasMore={hasMore}
-          loader={<div>데이터를 불러오는 중...</div>}
-          endMessage={<div>모든 데이터를 불러왔습니다.</div>}
+          loader={
+            <div className="border-t border-neutral-200 px-5 py-4 text-sm text-neutral-600">
+              데이터를 불러오는 중...
+            </div>
+          }
+          endMessage={
+            <div className="border-t border-neutral-200 px-5 py-4 text-sm text-neutral-600">
+              모든 데이터를 불러왔습니다.
+            </div>
+          }
         >
-          <ul>
-            {todos.map((item, index) => (
-              <li key={item.id}>
-                {/* 번호 표시 */}
-                <span>{getGlobalIndex(index)}</span>
-                {/* 체크 박스 */}
-                <input
-                  type="checkbox"
-                  checked={item.completed}
-                  className="border"
-                  onChange={() => handleToggle(item.id)}
-                />
-                {/* 제목과 날짜 출력 */}
-                <div>
-                  {editingId === item.id ? (
+          <ul className="divide-y divide-neutral-200">
+            <AnimatePresence initial={false}>
+              {todos.map((item, index) => (
+                <motion.li
+                  key={item.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+                  className="group grid grid-cols-[3rem_auto_auto] items-center gap-4 px-5 py-4 hover:bg-neutral-50"
+                >
+                  {/* 번호 표시 */}
+                  <span className="select-none text-center text-sm font-medium text-neutral-500">
+                    {getGlobalIndex(index)}
+                  </span>
+                  {/* 체크 박스 */}
+                  <div className="flex items-center gap-3">
                     <input
-                      className="border"
-                      type="text"
-                      value={editingTitle}
-                      onChange={e => setEditingTitle(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          handleEditSave(item.id);
-                        } else if (e.key === 'Escape') {
-                          handleEditCancel();
-                        }
-                      }}
+                      type="checkbox"
+                      checked={item.completed}
+                      className="h-5 w-5 rounded border-neutral-300 accent-blue-600"
+                      onChange={() => handleToggle(item.id)}
                     />
-                  ) : (
-                    <span>{item.title}</span>
-                  )}
-
-                  <span>작성일 : {formatDate(item.created_at)}</span>
-                </div>
-                {/* 버튼들 */}
-                {editingId === item.id ? (
-                  <>
-                    <button onClick={() => handleEditSave(item.id)} className="border">
-                      저장
-                    </button>
-                    <button onClick={handleEditCancel} className="border">
-                      취소
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => handleEditStart(item)} className="border">
-                      수정
-                    </button>
-                    <button className="border" onClick={() => handleDelete(item.id)}>
-                      삭제
-                    </button>
-                  </>
-                )}
-              </li>
-            ))}
+                    {/* 제목과 날짜 출력 */}
+                    <div className="flex flex-col">
+                      {editingId === item.id ? (
+                        <input
+                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-[15px] text-neutral-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          type="text"
+                          value={editingTitle}
+                          onChange={e => setEditingTitle(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              handleEditSave(item.id);
+                            } else if (e.key === 'Escape') {
+                              handleEditCancel();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className={[
+                            'text-[15px]',
+                            item.completed ? 'text-neutral-400 line-through' : 'text-neutral-900',
+                          ].join(' ')}
+                        >
+                          {item.title}
+                        </span>
+                      )}
+                      <span className="mt-0.5 text-xs text-neutral-500">
+                        작성일 : {formatDate(item.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  {/* 버튼들 */}
+                  <div className="ml-auto flex items-center gap-2">
+                    {editingId === item.id ? (
+                      <>
+                        <button
+                          onClick={() => handleEditSave(item.id)}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        >
+                          저장
+                        </button>
+                        <button
+                          onClick={handleEditCancel}
+                          className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-300"
+                        >
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEditStart(item)}
+                          className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-300"
+                        >
+                          수정
+                        </button>
+                        <button
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          삭제
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </motion.li>
+              ))}
+            </AnimatePresence>
           </ul>
         </InfiniteScroll>
       )}
@@ -243,17 +313,19 @@ const InfiniteTodoList = () => {
 
 function TodosInfinitePage() {
   return (
-    <div>
+    <div className="min-h-screen bg-neutral-50">
       <InfiniteScrollProvider itemsPerPage={15}>
-        <div>
-          <h1>무한 스크롤 Todo 목록</h1>
-          <div>
+        <main className="mx-auto max-w-3xl px-4 py-8">
+          <h1 className="mb-6 text-2xl font-bold tracking-tight text-neutral-900">
+            무한 스크롤 Todo 목록
+          </h1>
+          <div className="mb-6">
             <InfiniteTodoWrite />
           </div>
           <div>
             <InfiniteTodoList />
           </div>
-        </div>
+        </main>
       </InfiniteScrollProvider>
     </div>
   );

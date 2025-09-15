@@ -52,20 +52,20 @@ const TodoWrite = ({ handleChangePage }: TodoWriteProps): JSX.Element => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto mt-8 p-6 bg-white shadow-md rounded-lg">
-      <h2 className="text-2xl font-bold text-blue-600 mb-4">할 일 작성</h2>
-      <div className="flex space-x-2">
+    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-sky-700">할 일 작성</h2>
+      <div className="flex gap-2">
         <input
           type="text"
           value={title}
           onChange={e => handleChange(e)}
           onKeyDown={e => handleKeyDown(e)}
           placeholder="할 일을 입력하세요..."
-          className="flex-grow border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="flex-grow rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
         />
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+          className="shrink-0 rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-300"
         >
           등록
         </button>
