@@ -23,7 +23,6 @@
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    // "erasableSyntaxOnly": true,  // 안씀.
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },

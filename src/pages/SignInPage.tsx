@@ -1,74 +1,77 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 
 function SignInPage() {
-  const { signIn } = useAuth();
   const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState<string>('');
   const [pw, setPw] = useState<string>('');
   const [msg, setMsg] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // 해당 코드 필수 : 웹브라우저 갱신 막아주기
+    e.preventDefault();
 
     const { error } = await signIn(email, pw);
     if (error) {
       setMsg(`로그인 오류 : ${error}`);
     } else {
-      setMsg(`로그인이 성공하였습니다.`);
-      navigate('/'); // 로그인 성공 시 홈으로 이동
+      setMsg('로그인 성공');
+      // 바로 이동시키기
+      navigate('/todos');
     }
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 px-4 flex items-center justify-center">
-      <motion.div
-        className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 220, damping: 20 }}
-      >
-        <h2 className="mb-6 text-center text-2xl font-bold tracking-tight text-neutral-900">
-          로그인
-        </h2>
-        <div className="rounded-xl border border-neutral-200 p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <div>
+      <div className="page-header">
+        <h2 className="page-title">✨ 로그인 페이지</h2>
+        <p className="page-subtitle">계정에 로그인하세요.</p>
+      </div>
+      <div className="card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">이메일</label>{' '}
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="이메일"
-              autoComplete="email"
-              autoFocus
-              className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              placeholder="이메일을 입력하세요."
+              className="form-input"
+              required
             />
+          </div>
+          <div className="form-group">
+            <label className="form-label">비밀번호</label>
             <input
               type="password"
               value={pw}
               onChange={e => setPw(e.target.value)}
-              placeholder="비밀번호"
-              autoComplete="current-password"
-              className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-2 text-[15px] text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              placeholder="비밀번호를 입력하세요."
+              className="form-input"
+              required
             />
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              로그인
-            </button>
-          </form>
+          </div>
+          <button type="submit" className="btn btn-success btn-lg" style={{ width: '100%' }}>
+            로그인
+          </button>
+        </form>
+        {/* 메세지 출력 */}
+        {msg && (
           <p
-            className={`mt-4 text-center text-sm ${
-              msg.includes('성공') ? 'text-green-600' : 'text-red-600'
-            }`}
-            aria-live="polite"
+            style={{
+              marginTop: 'var(--space-4)',
+              padding: 'var(--space-3)',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: msg.includes('성공') ? 'var(--success-50)' : '#fef2f2',
+              color: msg.includes('성공') ? 'var(--success-600)' : '#dc2626',
+              border: `1px solid ${msg.includes('성공') ? 'var(--success-600)' : '#dc2626'}`,
+            }}
           >
             {msg}
           </p>
-        </div>
-      </motion.div>
+        )}
+      </div>
     </div>
   );
 }

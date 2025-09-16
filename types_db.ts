@@ -54,17 +54,17 @@ export type Database = {
         Row: {
           created_at: string
           id: number
-          memo: string | null
+          memo: string
         }
         Insert: {
           created_at?: string
           id?: number
-          memo?: string | null
+          memo: string
         }
         Update: {
           created_at?: string
           id?: number
-          memo?: string | null
+          memo?: string
         }
         Relationships: []
       }

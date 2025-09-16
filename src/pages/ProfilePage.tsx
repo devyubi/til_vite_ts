@@ -1,15 +1,15 @@
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getProfile, removeAvatar, updateProfile, uploadAvatar } from '../lib/profile';
+import type { Profile, ProfileUpdate } from '../types/TodoTypes';
+import Loading from '../components/Loading';
+
 /**
  * 사용자 프로필 페이지
  * - 기본 정보 표시
  * - 정보 수정
- * - 회원 탈퇴 기능 : 반드시 확인을 거치고 진행해야함
+ * - 회원탈퇴 기능 : 확인을 거치고 진행하도록
  */
-
-import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { getProfile, removeAvatar, updateProfile, uploadAvatar } from '../lib/profile';
-import type { Profile, ProfileUpdate } from '../types/todoType';
-
 function ProfilePage() {
   // 회원 기본 정보
   const { user, deleteAccount } = useAuth();
@@ -17,50 +17,50 @@ function ProfilePage() {
   const [loading, setLoading] = useState<boolean>(true);
   // 사용자 프로필
   const [profileData, setProfileData] = useState<Profile | null>(null);
-  // Error 메세지
+  // 에러 메시지
   const [error, setError] = useState<string>('');
   // 회원 정보 수정
-  const [userEdit, setUserEdit] = useState<boolean>(false);
+  const [edit, setEdit] = useState<boolean>(false);
   // 회원 닉네임 보관
   const [nickName, setNickName] = useState<string>('');
 
-  // 사용자 아바타 이미지를 위한 상태 관리
+  // 사용자 아바타 이미지를 위한 상태관리
   // 이미지 업로드 상태 표현
   const [uploading, setUploading] = useState<boolean>(false);
-  // 미리보기 이미지 URL (문자열)
+  // 미리보기 이미지 url (문자열)
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   // 실제 파일 (바이너리)
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  // 사용자가 새로운 이미지 선택 시 (편집중인 경우), 원본 URL 보관용 (문자열)
-  const [originalAvatarUrl, setOriginalAvatarUrl] = useState<string | null>(null);
-  // 이미지 제거 요청 상태 (그러나, 실제 file 제거는 수정 확인 버튼을 눌렀을 때 처리함)
-  const [imageRemoverRequest, setImageRemoverRequest] = useState<boolean>(false);
-  // input type='file' 태그 참조
+  // 사용자가 새로운 이미지 선택시 즉, 편집 중인 경우 원본 URL 보관용 문자열
+  const [originalAvatarUrl, setOriginalAvartarUrl] = useState<string | null>(null);
+  // 이미지 제거 요청 상태(그러나, 실제 file 제거는 수정확인 버튼 눌렀을 때 처리)
+  const [imageRemovalRequest, setImageRemovalReauest] = useState<boolean>(false);
+  // input type="file" 태그 참조
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 사용자 프로필 정보 가져오기
   const loadProfile = async () => {
     if (!user?.id) {
       // 사용자의 id 가 없으면 중지
-      setError('사용자의 정보를 찾을 수 없습니다.');
+      setError('사용자 정보를 찾을 수 없습니다.');
       setLoading(false);
       return;
     }
     try {
-      // 사용자 정보를 가져오기 ( null 일 수도 있음 )
+      // 사용자 정보 가져오기 ( null 일수도 있다. )
       const tempData = await getProfile(user?.id);
+
       if (!tempData) {
-        // null 일 경우
-        setError('사용자의 프로필 정보를 찾을 수 없습니다.');
+        // null 이라면
+        setError('사용자 프로필 정보를 찾을 수 없습니다.');
         return;
       }
-
-      // 사용자 정보가 있을 경우
+      // 사용자 정보가 있다.
       setNickName(tempData.nickname || '');
       setProfileData(tempData);
-    } catch (error) {
-      console.log(error);
-      setError('사용자의 프로필 정보 호출 오류');
+    } catch (err) {
+      console.log(err);
+      setError('사용자 프로필 호출 오류!!!');
     } finally {
       setLoading(false);
     }
@@ -74,63 +74,60 @@ function ProfilePage() {
     if (!profileData) {
       return;
     }
-    // 여러개가 업로드 되어선 안됨
+    // 여러개가 업로드 되면 안됨
     setLoading(true);
 
     try {
       let imgUrl = originalAvatarUrl; // 원본 이미지 URL
-      // 아바타 이미지 제거라면?
-      if (imageRemoverRequest) {
-        // storage 에 실제 이미지를 제거함
+      // 아바타이미지 제거라면
+      if (imageRemovalRequest) {
+        // storage 에 실제 이미지를 제거함.
         const success = await removeAvatar(user.id);
-        console.log('success', success);
         if (success) {
           imgUrl = null;
         } else {
           alert('이미지 제거에 실패했습니다. 기존 이미지가 유지 됩니다.');
         }
       } else if (selectedFile) {
-        // 새로운 이미지가 업로드 된다면?
+        // 새로운 이미지가 업로드 된다면
         const uploadedImageUrl = await uploadAvatar(selectedFile, user.id);
         if (uploadedImageUrl) {
-          // 실제로 업로드 완료 후 전달받은 URL 문자열을 보관함
+          // 실제로 업로드 완료 후 전달받은 URL 문자열을 보관함.
           // profiles 테이블에 avatar_url 에 넣어줄 문자열
           imgUrl = uploadedImageUrl;
         } else {
-          alert('이미지 업로드에 실패했습니다. 닉네임만 저장됩니다.');
+          alert('이미지 업로드에 실패했습니다. 닉네임만 저장합니다.');
         }
       }
 
       // 실제로 업데이트 진행 부분
       const tempUpdateData: ProfileUpdate = { nickname: nickName, avatar_url: imgUrl };
+
       const success = await updateProfile(tempUpdateData, user.id);
       if (!success) {
         console.log('프로필 업데이트에 실패하였습니다.');
         return;
       }
-      // 업데이트 성공 시 초기화 진행
+      // 업데이트 성공시 초기화 진행
       setPreviewImage(null);
       setSelectedFile(null);
-      setImageRemoverRequest(false);
-      setOriginalAvatarUrl(null);
+      setImageRemovalReauest(false);
+      setOriginalAvartarUrl(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-
       await loadProfile();
       alert('프로필이 성공적으로 업데이트 되었습니다.');
     } catch (err) {
       console.log('프로필 업데이트 오류', err);
     } finally {
-      setUserEdit(false);
-      setUploading(false);
-      setLoading(false);
+      setEdit(false);
     }
   };
 
   // 회원탈퇴
   const handleDeleteUser = () => {
-    const message: string = '계정을 완전히 삭제하시겠습니까? \n\n 복구가 불가능 합니다.';
+    const message: string = '😥 계정을 완전히 삭제하시겠습니까? \n\n 복구가 불가능합니다.';
     let isConfirm = false;
     isConfirm = confirm(message);
 
@@ -139,14 +136,14 @@ function ProfilePage() {
     }
   };
 
-  // 이미지 선택 처리 (미리보기)
+  // 이미지 파일 선택 처리(미리보기)
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
       return;
     }
     // 파일 형식 검증
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
     if (!allowedTypes.includes(file.type)) {
       alert(`지원하지 않는 파일 형식입니다. 허용 형식: ${allowedTypes.join(', ')}`);
       return;
@@ -159,7 +156,7 @@ function ProfilePage() {
       return;
     }
 
-    // 미리보기 생성 (파일을 문자열로 변환한 것)
+    // 미리보기 생성 (파일을 글자로 변환한 것..)
     const reader = new FileReader();
     reader.onload = e => {
       setPreviewImage(e.target?.result as string);
@@ -168,9 +165,8 @@ function ProfilePage() {
 
     setSelectedFile(file);
     // 새 이미지 선택 시 이미지 제거 요청 상태 초기화
-    setImageRemoverRequest(false);
+    setImageRemovalReauest(false);
   };
-
   // 이미지 파일 선택 취소
   const handleCancelUpload = () => {
     setPreviewImage(null);
@@ -180,15 +176,15 @@ function ProfilePage() {
     }
   };
 
-  // 이미지 파일 제거 처리
+  // 이미지 제거 처리
   const handleRemoveImage = () => {
-    const ok = confirm('프로필 이미지를 제거 하시겠습니까?');
+    const ok = confirm('프로필 이미지를 제거하시겠습니까?');
     if (!ok) {
       return;
     }
-    // 즉시 제거하지 않음
-    // 제거 하라는 상태만 별도로 관리함
-    setImageRemoverRequest(true);
+    // 즉시 제거하지 않습니다.
+    // 제거하라는 상태만 별도로 관리함.
+    setImageRemovalReauest(true);
     setPreviewImage(null);
     setSelectedFile(null);
     if (fileInputRef.current) {
@@ -201,22 +197,15 @@ function ProfilePage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 z-[999] w-full h-full bg-sky-400 flex items-center justify-center">
-        <h1 className="text-white text-xl font-bold">프로필 로딩중 ...</h1>
-      </div>
-    );
+    return <Loading message="프로필 정보를 불러오는 중 ..." size="lg" />;
   }
-  // error 메세지 출력하기
+  // error 메시지 출력하기
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-        <h2 className="text-2xl font-bold mb-4">프로필</h2>
-        <div className="mb-4 text-red-600">{error}</div>
-        <button
-          onClick={loadProfile}
-          className="px-4 py-2 bg-blue-200 text-white rounded-lg hover:bg-blue-300 transition-colors"
-        >
+      <div className="card" style={{ textAlign: 'center' }}>
+        <h2 className="page-title">⚠️ 프로필 오류</h2>
+        <div style={{ color: 'var(--gray-600)', marginBottom: 'var(--space-4)' }}>{error}</div>
+        <button onClick={loadProfile} className="btn btn-primary">
           재시도
         </button>
       </div>
@@ -224,48 +213,196 @@ function ProfilePage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-3xl font-bold mb-8 text-blue-700">회원 정보</h2>
-      {/* 사용자 기본 정보 */}
-      <div className="mb-6 p-6 border rounded-lg shadow bg-white">
-        <h3 className="text-xl font-semibold mb-4">기본 정보</h3>
-        <div className="text-gray-700 mb-2">이메일 : {user?.email}</div>
-        <div className="text-gray-700">
-          가입일: {user?.created_at && new Date(user.created_at).toLocaleString()}
+    <div>
+      <div className="page-header">
+        <h2 className="page-title">👤 회원정보</h2>
+        <p className="page-subtitle">개인 정보를 확인하고 수정하세요.</p>
+      </div>
+      {/* 사용자 기본 정보 섹션 */}
+      <div className="card">
+        <h3 style={{ marginBottom: 'var(--space-4)', color: 'var(--gray--800)' }}>📧 기본 정보</h3>
+        <div className="form-group">
+          <label className="form-label">이메일</label>
+          <div
+            style={{
+              padding: 'var(--space-3)',
+              backgroundColor: 'var(--gray-50)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--gray-700)',
+            }}
+          >
+            {user?.email}
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">가입일</label>
+          <div
+            style={{
+              padding: 'var(--space-3)',
+              backgroundColor: 'var(--gray-50)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--gray-700)',
+            }}
+          >
+            {user?.created_at && new Date(user.created_at).toLocaleString()}
+          </div>
         </div>
       </div>
-      {/* 사용자 추가 정보 */}
-      <div className="p-6 border rounded-lg shadow bg-white">
-        <h3 className="text-xl font-semibold mb-4">사용자 추가 정보</h3>
-        <div className="text-gray-700 mb-2">아이디 : {profileData?.id}</div>
-        {userEdit ? (
+      {/* 사용자 추가정보 */}
+      <div className="card">
+        <h3 style={{ marginBottom: 'var(--space-4)', color: 'var(--gray--800)' }}>
+          👤 사용자 추가 정보
+        </h3>
+        <div className="form-group">
+          <label className="form-label">아이디</label>
+          <div
+            style={{
+              padding: 'var(--space-3)',
+              backgroundColor: 'var(--gray-50)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--gray-700)',
+            }}
+          >
+            {profileData?.id}
+          </div>
+        </div>
+        {edit ? (
           <>
-            <div className="mb-4">
-              닉네임 :
+            <div className="form-group">
+              <label className="form-label">닉네임</label>
               <input
                 type="text"
                 value={nickName}
                 onChange={e => setNickName(e.target.value)}
-                className="ml-2 px-2 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className="form-input"
+                placeholder="닉네임을 입력하세요."
               />
             </div>
-            <div className="text-gray-700 mb-4">
-              <h4>아바타 편집</h4>
-              <div>
+            <div className="form-group">
+              <label className="form-label">아바타 편집</label>
+              <div style={{ marginBottom: 'var(--space-4)' }}>
                 {previewImage ? (
-                  <div>
-                    <img src={previewImage} />
-                    <p>새로운 이미지 미리보기</p>
+                  <div style={{ textAlign: 'center' }}>
+                    <img
+                      src={previewImage}
+                      style={{
+                        width: '120px',
+                        height: '120px',
+                        objectFit: 'cover',
+                        borderRadius: '50%',
+                        border: '3px solid var(--primary-500)',
+                        boxShadow: 'var(--shadow-md)',
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--primary-600)',
+                        marginTop: 'var(--space-2)',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      새로운 이미지 미리보기
+                    </p>
                   </div>
-                ) : imageRemoverRequest ? (
-                  <div>이미지 제거됨.</div>
+                ) : imageRemovalRequest ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: '120px',
+                        height: '120px',
+                        backgroundColor: 'var(--gray-50)',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '3px dashed #dc3545',
+                        margin: '0 auto',
+                      }}
+                    >
+                      <div
+                        style={{
+                          textAlign: 'center',
+                          fontSize: '11px',
+                          color: '#dc3545',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        이미지 제거됨
+                      </div>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: '#dc3545',
+                        marginTop: 'var(--space-2)',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      이미지가 제거되었습니다
+                    </p>
+                  </div>
                 ) : originalAvatarUrl ? (
-                  <div>
-                    <img src={originalAvatarUrl} />
-                    현재 아바타
+                  <div style={{ textAlign: 'center' }}>
+                    <img
+                      src={originalAvatarUrl}
+                      alt="현재 아바타"
+                      style={{
+                        width: '120px',
+                        height: '120px',
+                        objectFit: 'cover',
+                        borderRadius: '50%',
+                        border: '3px solid var(--success-500)',
+                        boxShadow: 'var(--shadow-md)',
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--success-600)',
+                        marginTop: 'var(--space-2)',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      현재 아바타
+                    </p>
                   </div>
                 ) : (
-                  <div>이미지 없음, 아바타 이미지를 설정 해보세요!</div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: '120px',
+                        height: '120px',
+                        backgroundColor: 'var(--gray-50)',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '3px dashed var(--gray-400)',
+                        margin: '0 auto',
+                      }}
+                    >
+                      <div
+                        style={{
+                          textAlign: 'center',
+                          fontSize: '11px',
+                          color: 'var(--gray-500)',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        이미지 없음
+                      </div>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--gray-500)',
+                        marginTop: 'var(--space-2)',
+                      }}
+                    >
+                      아바타 이미지를 설정해보세요
+                    </p>
+                  </div>
                 )}
               </div>
               <div>
@@ -273,108 +410,195 @@ function ProfilePage() {
                   type="file"
                   ref={fileInputRef}
                   accept="image/*"
-                  onChange={handleImageSelect}
                   style={{ display: 'none' }}
+                  onChange={handleImageSelect}
                 />
-              </div>
-              <div>
-                <div>
-                  {/* disabled : 비활성화 */}
-                  <button disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-                    {uploading ? '업로드 중...' : '이미지 선택'}
-                  </button>
-                  {previewImage && (
-                    <button disabled={uploading} onClick={handleCancelUpload}>
-                      취소
-                    </button>
-                  )}
-                  {!previewImage && !imageRemoverRequest && originalAvatarUrl && (
-                    <button onClick={handleRemoveImage}>
-                      {uploading ? '처리 중' : '이미지 제거'}
-                    </button>
-                  )}
-                  {imageRemoverRequest && (
+                <div style={{ textAlign: 'center' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 'var(--space-3)',
+                      justifyContent: 'center',
+                      flexWrap: 'wrap',
+                      marginBottom: 'var(--space-4)',
+                    }}
+                  >
                     <button
+                      className={`btn ${uploading ? 'btn-secondary' : 'btn-primary'}`}
                       disabled={uploading}
-                      onClick={() => {
-                        setImageRemoverRequest(false);
-                      }}
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      제거 취소
+                      {uploading ? '업로드 중...' : '이미지 선택'}
                     </button>
-                  )}
+
+                    {previewImage && (
+                      <button
+                        className={`btn btn-secondary`}
+                        disabled={uploading}
+                        onClick={handleCancelUpload}
+                      >
+                        취소
+                      </button>
+                    )}
+
+                    {!previewImage && !imageRemovalRequest && originalAvatarUrl && (
+                      <button
+                        className="btn"
+                        style={{
+                          backgroundColor: uploading ? 'var(--gray-300)' : '#dc3545',
+                          color: 'white',
+                        }}
+                        onClick={handleRemoveImage}
+                      >
+                        {uploading ? '처리 중...' : '이미지 제거'}
+                      </button>
+                    )}
+
+                    {imageRemovalRequest && (
+                      <button
+                        disabled={uploading}
+                        className={`btn ${uploading ? 'btn-secondary' : 'btn-success'}`}
+                        onClick={() => {
+                          setImageRemovalReauest(false);
+                        }}
+                      >
+                        제거 취소
+                      </button>
+                    )}
+                  </div>
                 </div>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--gray-500)',
+                    marginTop: 'var(--space-2)',
+                    textAlign: 'center',
+                  }}
+                >
+                  지원 형식 : JPEG, PNG, GIF (최대 5MB)
+                </p>
               </div>
-              <p>지원 형식 : JPEG, PNG, GIF (최대 5MB)</p>
             </div>
           </>
         ) : (
           <>
-            <div className="text-gray-700 mb-4">닉네임 : {profileData?.nickname}</div>
-            <div className="text-gray-700 mb-4">
-              <h4>아바타 : </h4>
-              {profileData?.avatar_url ? (
-                <img src={profileData.avatar_url} className="h-16 w-16 rounded-full mt-2" />
-              ) : (
-                <div>기본 이미지</div>
-              )}
+            <div className="form-group">
+              <label className="form-label">닉네임</label>
+              <div
+                style={{
+                  padding: 'var(--space-3)',
+                  backgroundColor: 'var(--gray-50)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--gray-700)',
+                }}
+              >
+                {profileData?.nickname || '닉네임이 설정되지 않았습니다'}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">🖼️ 아바타</label>
+              <div style={{ textAlign: 'center' }}>
+                {profileData?.avatar_url ? (
+                  <img
+                    src={profileData.avatar_url}
+                    alt="프로필 이미지"
+                    style={{
+                      width: '120px',
+                      height: '120px',
+                      objectFit: 'cover',
+                      borderRadius: '50%',
+                      border: '3px solid var(--success-500)',
+                      boxShadow: 'var(--shadow-md)',
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '120px',
+                      height: '120px',
+                      backgroundColor: 'var(--gray-50)',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '3px dashed var(--gray-400)',
+                      margin: '0 auto',
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 'bold' }}>
+                      이미지 없음
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
-        <div className="text-gray-700 mb-4">
-          가입일 : {profileData?.created_at && new Date(profileData.created_at).toLocaleString()}
+
+        <div className="form-group">
+          <label className="form-label">가입일</label>
+          <div
+            style={{
+              padding: 'var(--space-3)',
+              backgroundColor: 'var(--gray-50)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--gray-700)',
+            }}
+          >
+            {profileData?.created_at && new Date(profileData.created_at).toLocaleString()}
+          </div>
         </div>
       </div>
-      {error && (
-        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-          {error}
-        </div>
-      )}
-      <div className="mt-6 flex gap-3">
-        {userEdit ? (
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 'var(--space-3)',
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+        }}
+      >
+        {edit ? (
           <>
             <button
+              className={`btn btn-lg ${uploading ? 'btn-secondary' : 'btn-primary'}`}
               disabled={uploading}
               onClick={saveProfile}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
             >
-              {uploading ? '저장 중...' : '수정 확인'}
+              {uploading ? '저장 중...' : '수정확인'}
             </button>
             <button
+              className="btn btn-secondary btn-lg"
               onClick={() => {
-                setUserEdit(false);
+                setEdit(false);
                 setNickName(profileData?.nickname || '');
                 setPreviewImage(null);
                 setSelectedFile(null);
-                setImageRemoverRequest(false);
-                setOriginalAvatarUrl(null);
+                setImageRemovalReauest(false);
+                setOriginalAvartarUrl(null);
                 if (fileInputRef.current) {
                   fileInputRef.current.value = '';
                 }
               }}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
             >
-              수정 취소
+              수정취소
             </button>
           </>
         ) : (
           <>
             <button
+              className="btn btn-primary btn-lg"
               onClick={() => {
-                setUserEdit(true);
+                setEdit(true);
                 // 편집 시작 시 원본 이미지 URL 저장
-                setOriginalAvatarUrl(profileData?.avatar_url || null);
-                setImageRemoverRequest(false);
+                setOriginalAvartarUrl(profileData?.avatar_url || null);
+                setImageRemovalReauest(false);
               }}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
-              정보 수정
+              정보수정
             </button>
-            <button
-              onClick={handleDeleteUser}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-            >
-              회원 탈퇴
+            <button className="btn btn-danger btn-lg" onClick={handleDeleteUser}>
+              회원탈퇴
             </button>
           </>
         )}

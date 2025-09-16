@@ -1,16 +1,13 @@
 import React, { createContext, useReducer } from 'react';
-import { ShopActionType, type ShopValueType } from './types';
 import { reducer } from './reducer';
 import { initialState } from './state';
+import { ShopActionType, type ShopValueType } from './types';
 
-export const ShopContext = createContext<ShopValueType | null>(null);
-
-// 4. provider
-// export const ShopProvider = ({ children }: React.PropsWithChildren) => {
+export const ShopContext = createContext<null | ShopValueType>(null);
 export const ShopProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // 4-1. dispatch 용 함수 표현식
+  // dispatch 용 함수 표현식
   const addCart = (id: number) => {
     dispatch({ type: ShopActionType.ADD_CART, payload: { id } });
   };
@@ -20,11 +17,11 @@ export const ShopProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const clearCart = (id: number) => {
     dispatch({ type: ShopActionType.CLEAR_CART_ITEM, payload: { id } });
   };
-  const buyAll = () => {
-    dispatch({ type: ShopActionType.BUY_ALL });
-  };
   const resetCart = () => {
     dispatch({ type: ShopActionType.RESET });
+  };
+  const buyAll = () => {
+    dispatch({ type: ShopActionType.BUY_ALL });
   };
 
   const value: ShopValueType = {
@@ -34,9 +31,8 @@ export const ShopProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     addCart,
     removeCartOne,
     clearCart,
-    buyAll,
     resetCart,
+    buyAll,
   };
-
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 };

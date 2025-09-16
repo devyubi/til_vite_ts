@@ -1,30 +1,24 @@
-import React, { useEffect, useState } from 'react';
-import { TodoProvider, useTodos } from '../contexts/TodoContext';
-import TodoWrite from '../components/todos/TodoWrite';
+import { useEffect, useState } from 'react';
 import TodoList from '../components/todos/TodoList';
-
+import TodoWrite from '../components/todos/TodoWrite';
+import { TodoProvider, useTodos } from '../contexts/TodoContext';
+import type { Profile } from '../types/TodoTypes';
 import { useAuth } from '../contexts/AuthContext';
 import { getProfile } from '../lib/profile';
 import Pagination from '../components/Pagination';
-import type { Profile } from '../types/todoType';
 
-// 용서하세요. 컴포넌트는 여기서 작성하겠습니다.
-// 필요하시면 이동 부탁합니다.
+// 컴포넌트
 interface TodosContentProps {
   currentPage: number;
   itemsPerPage: number;
   handleChangePage: (page: number) => void;
 }
-const TodosContent = ({
-  currentPage,
-  itemsPerPage,
-  handleChangePage,
-}: TodosContentProps): JSX.Element => {
+const TodosContent = ({ currentPage, itemsPerPage, handleChangePage }: TodosContentProps) => {
   const { totalCount, totalPages } = useTodos();
   return (
     <div>
       <div>
-        {/* 새 글 등록 시 1 페이지로 이동 후 목록 새로고침 */}
+        {/* 새 글 등록시 1페이지로 이동후 목록 새로고침 */}
         <TodoWrite handleChangePage={handleChangePage} />
       </div>
       <div>
@@ -45,11 +39,10 @@ const TodosContent = ({
 
 function TodosPage() {
   const { user } = useAuth();
-
   // 페이지네이션 관련
   const [currentPage, setCurrentPage] = useState(1);
-  // const itemsPerPage = 10; 으로 넣어도 됨
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  // const itemsPerPage = 10;
   // 페이지 변경 핸들러
   const handleChangePage = (page: number) => {
     setCurrentPage(page);
@@ -63,7 +56,7 @@ function TodosPage() {
       if (user?.id) {
         const userProfile = await getProfile(user.id);
         if (!userProfile) {
-          alert('탈퇴한 회원입니다. 관리자님에게 요청하세요.');
+          alert('탈퇴한 회원입니다. 관리자에게 요청하세요.');
         }
         setProfile(userProfile);
       }
@@ -78,12 +71,16 @@ function TodosPage() {
 
   return (
     <div>
-      <h2>{profile?.nickname}할 일</h2>
+      <div className="page-header">
+        <h2 className="page-title">🎆 할 일 관리</h2>
+        {profile?.nickname && <p className="page-subtitle">{profile.nickname}님의 Todo 관리</p>}할
+        일
+      </div>
       <TodoProvider currentPage={currentPage} limit={itemsPerPage}>
         <TodosContent
+          handleChangePage={handleChangePage}
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
-          handleChangePage={handleChangePage}
         />
       </TodoProvider>
     </div>
