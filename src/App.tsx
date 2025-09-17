@@ -1,18 +1,17 @@
 import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import HomePage from './pages/HomePage';
-import SignUpPage from './pages/SignUpPage';
-import SignInPage from './pages/SignInPage';
-import TodosPage from './pages/TodosPage';
 import Protected from './components/Protected';
-import ProfilePage from './pages/ProfilePage';
-import AuthCallback from './pages/AuthCallback';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AdminPage from './pages/AdminPage';
-import TodosInfinitePage from './pages/TodosInfinitePage';
-import TodoListPage from './pages/TodoListPage';
-import TodoWritePage from './pages/TodoWritePage';
-import TodoEditPage from './pages/TodoEditPage';
+import AuthCallback from './pages/AuthCallback';
+import HomePage from './pages/HomePage';
+import ProfilePage from './pages/ProfilePage';
+import SignInPage from './pages/SignInPage';
+import SignUpPage from './pages/SignUpPage';
 import TodoDetailPage from './pages/TodoDetailPage';
+import TodoEditPage from './pages/TodoEditPage';
+import TodoListPage from './pages/TodoListPage';
+import TodosInfinitePage from './pages/TodosInfinitePage';
+import TodoWritePage from './pages/TodoWritePage';
 
 const TopBar = () => {
   const { signOut, user } = useAuth();
@@ -72,7 +71,13 @@ function App() {
         <div className="page-header">
           <h1 className="page-title">🥚Todo Service</h1>
         </div>
-        <Router>
+
+        <Router
+          future={{
+            v7_relativeSplatPath: true,
+            v7_startTransition: true,
+          }}
+        >
           <TopBar />
           <Routes>
             <Route path="/" element={<HomePage />} />
