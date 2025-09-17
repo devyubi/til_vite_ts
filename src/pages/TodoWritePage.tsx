@@ -4,6 +4,7 @@ import type { Profile, TodoInsert } from '../types/TodoTypes';
 import { getProfile } from '../lib/profile';
 import { useNavigate } from 'react-router-dom';
 import { createTodo } from '../services/todoService';
+import RichTextEditor from '../components/RichTextEditor';
 
 function TodoWritePage() {
   const { user } = useAuth();
@@ -16,8 +17,11 @@ function TodoWritePage() {
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
   };
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
+  // const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  //   setContent(e.target.value);
+  // };
+  const handleContentChange = (value: string) => {
+    setContent(value);
   };
   const handleCancel = () => {
     // 사용자가 실수로 취소를 할 수 있으므로 이에 대비
@@ -88,14 +92,20 @@ function TodoWritePage() {
         </div>
         <div className="form-group">
           <label className="form-label">상세 내용</label>
-          <textarea
+          {/* <textarea
             className="form-input"
             value={content}
             onChange={e => handleContentChange(e)}
             placeholder="상세 내용을 입력해주세요(선택사항)"
             rows={6}
             disabled={saving}
-          ></textarea>
+          /> */}
+          <RichTextEditor
+            value={content}
+            onChange={handleContentChange}
+            placeholder="상세 내용을 입력 해주세요."
+            disabled={saving}
+          />
         </div>
         <div style={{ display: 'flex ', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary" onClick={handleCancel} disabled={saving}>

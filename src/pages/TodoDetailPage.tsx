@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getProfile } from '../lib/profile';
 import { deleteTodo, getTodoById } from '../services/todoService';
 import type { Profile, Todo } from '../types/TodoTypes';
+import DOMPurify from 'dompurify';
 
 function TodoDetailPage() {
   const navigate = useNavigate();
@@ -171,16 +172,14 @@ function TodoDetailPage() {
               <h4 style={{ margin: '0 0 var(--space-3) 0', color: 'var(--gray-700)' }}>
                 상세 내용
               </h4>
-              <p
+              <div
                 style={{
                   margin: 0,
                   color: 'var(--gray-600)',
                   lineHeight: '1.6',
-                  whiteSpace: 'pre-wrap',
                 }}
-              >
-                {todo.content}
-              </p>
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(todo.content) }}
+              ></div>
             </div>
           )}
           {/* 추가정보 출력 */}

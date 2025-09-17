@@ -6,6 +6,7 @@ import { getProfile } from '../lib/profile';
 import { getTodoById, updateTodo } from '../services/todoService';
 import Loading from '../components/Loading';
 import { toggleTodo } from '../services/todoServices';
+import RichTextEditor from '../components/RichTextEditor';
 
 function TodoEditPage() {
   const navigate = useNavigate();
@@ -95,8 +96,12 @@ function TodoEditPage() {
     setTitle(e.target.value);
   };
 
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
+  // const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  //   setContent(e.target.value);
+  // };
+
+  const handleContentChange = (value: string) => {
+    setContent(value);
   };
 
   const handleSave = async () => {
@@ -190,12 +195,18 @@ function TodoEditPage() {
         </div>
         <div className="form-group">
           <label className="form-label">상세 내용</label>
-          <textarea
+          {/* <textarea
             className="form-input"
             onChange={handleContentChange}
             value={content}
             rows={6}
             placeholder="상세 내용을 입력하세요.(선택사항)"
+            disabled={saving}
+          /> */}
+          <RichTextEditor
+            value={content}
+            onChange={handleContentChange}
+            placeholder="상세 내용을 입력하세요."
             disabled={saving}
           />
         </div>

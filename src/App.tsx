@@ -17,7 +17,7 @@ const TopBar = () => {
   const { signOut, user } = useAuth();
   // 관리자인 경우 메뉴 추가로 출력하기
   // isAdmin 에는 true/fasle
-  const isAdmin = user?.email === 'dev.seastj@gmail.com';
+  const isAdmin = user?.email === 'lynn9702@naver.com';
 
   return (
     <nav className="nav">
@@ -71,7 +71,6 @@ function App() {
         <div className="page-header">
           <h1 className="page-title">🥚Todo Service</h1>
         </div>
-
         <Router
           future={{
             v7_relativeSplatPath: true,
@@ -109,7 +108,7 @@ function App() {
               }
             />
             <Route
-              path="/todos/detail:id"
+              path="/todos/detail/:id"
               element={
                 <Protected>
                   <TodoDetailPage />
