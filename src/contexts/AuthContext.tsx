@@ -27,6 +27,12 @@ type AuthContextType = {
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
   // 회원 로그인 함수(이메일, 비밀번호) : 비동기
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  // 이메일 중복 확인 함수
+  checkEmailExists: (email: string) => Promise<{ exist: boolean; error?: string }>;
+  // 카카오 로그인 함수
+  signInWithKakao: () => Promise<{ error?: string }>;
+  // 카카오 계정 연동 해제 함수 (회원 탈퇴)
+  unlinkKakaoAccount: () => Promise<{ error?: string; success?: boolean; message?: string }>;
   // 회원 로그아웃
   signOut: () => Promise<void>;
   // 회원정보 로딩 상태
@@ -105,13 +111,103 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
     }
     return {};
   };
+  // 카카오 로그인 함수
+  const signInWithKakao: AuthContextType['signInWithKakao'] = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      // 로그인 실행 후 이동 옵션
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    // 오류 발생 시 체크 해보기
+    if (error) {
+      return { error: error.message };
+    }
+    console.log('카카오 로그인 성공', data);
+    return {};
+  };
+  // 이메일 중복 확인 함수
+  // - 회원 가입 시 이메일을 먼저 파악 후, 회원가입 시도
+  // - 결과에 따라서 메에지를 다양하게 출력을 한다; 라는 시나리오
+  // - 좀 위험한 것은 error.message를 문자열로 비교한 것이 좀 불안함
+  const checkEmailExists: AuthContextType['checkEmailExists'] = async (email: string) => {
+    try {
+      // 1번 방법 : supabase Auth 에서 이메일 중복 확인
+      // - 일단 가짜 데이터로 회원가입을 시도 후, 그 결과로 이메일 존재를 확인하기
+      // - 이메일이 존재하지만, 비밀번호가 틀린 경우
+      // - 이메일이 존재하지 않는 경우
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: 'dummy Password 입니다.', // 더미 비밀번호로 로그인 시도
+        options: {
+          data: {
+            temp_check: true, // 임시 확인용 플래그
+          },
+        },
+      });
+      if (error) {
+        // 이메일이 존재하지만 비밀번호가 틀린경우
+        if (
+          error.message.includes('already registered') ||
+          error.message.includes('User already registered') ||
+          error.message.includes('already been registered') ||
+          error.message.includes('already exists')
+        ) {
+          return { exist: true }; // 이미 존재하는 계정 즉, 이메일이다.
+        }
+
+        // 또 다른 오류인 경우
+        if (data.user) {
+          await supabase.auth.signOut(); // 다른 오류라면 로그아웃을 시켜버림
+        }
+        return { exist: false }; // 존재하지 않는 이메일입니다.
+      }
+      return { exist: false };
+    } catch (err) {
+      console.log('이메일 중복 확인 오류 :', err);
+      return { exist: false, error: '이메일 중복 확인 중 오류가 발생했습니다.' };
+    }
+  };
+
   // 회원 로그아웃
   const signOut: AuthContextType['signOut'] = async () => {
     await supabase.auth.signOut();
   };
-  // 회원 탈퇴기능
+  // 카카오 계정 연동 해제 함수 (회원 탈퇴)
+  const unlinkKakaoAccount: AuthContextType['unlinkKakaoAccount'] = async () => {
+    try {
+      // 카카오 로그인 사용자인지 확인
+      if (user?.app_metadata.provider !== 'kakao') {
+        return { error: '카카오 로그인 사용자가 아닙니다.' };
+      }
+      // supabase 에서 카카오 계정 연동 해제
+      // 사용자의 카카오 identity 찾기
+      const kakaoIdentity = user.identities?.find(item => item.provider === 'kakao');
+      if (!kakaoIdentity) {
+        return { error: '카카오 계정 연동 정보를 찾을 수 없습니다.' };
+      }
+      // 사용자의 카카오 identity 찾기 성공
+      const { error } = await supabase.auth.unlinkIdentity(kakaoIdentity);
+      if (error) {
+        console.log('카카오 계정 연동 해제 실패 :', error.message);
+        return { error: '카카오 계정 연동 해제에 실패 하였습니다.' };
+      }
+      // 계정 해제에 성공 시
+      return {
+        success: true,
+        message: '카카오 계정 연동이 해제 되었습니다. 다시 로그인 해주세요.',
+      };
+    } catch (err) {
+      console.log(`카카오 계정 연동 해제 오류:`, err);
+      return { error: '카카오 계정 연동 해제 중 오류가 발생 했습니다.' };
+    }
+  };
+  // 회원 탈퇴기능 (카카오 회원탈퇴 기능 추가)
   const deleteAccount: AuthContextType['deleteAccount'] = async () => {
     try {
+      // 카카오 로그인 사용자 인지 확인
+      const isKakaoUser = user?.app_metadata.provider === 'kakao';
       // 기존에 사용한 데이터들을 먼저 정리한다.
       const { error: profileError } = await supabase.from('profiles').delete().eq('id', user?.id);
       if (profileError) {
@@ -125,7 +221,7 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
       const deleteInfo: DeleteRequestInsert = {
         user_email: user?.email as string,
         user_id: user?.id,
-        reason: '사용자 요청',
+        reason: isKakaoUser ? '카카오 회원 탈퇴 요청' : '사용자 요청',
         status: 'pending',
       };
       const { error: deleteRequestError } = await supabase
@@ -144,7 +240,9 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
 
       return {
         success: true,
-        message: '계정 삭제 요청이 완료되었습니다. 관리자 승인 후 완전히 삭제됩니다.',
+        message: isKakaoUser
+          ? '카카오 계정 연동이 해제 되었습니다. 계정 삭제가 요청되었습니다.'
+          : '계정 삭제 요청이 완료되었습니다. 관리자 승인 후 완전히 삭제됩니다.',
       };
     } catch (err) {
       console.log('탈퇴 요청 기능 오류 : ', err);
@@ -155,6 +253,9 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const value: AuthContextType = {
     signUp,
     signIn,
+    signInWithKakao,
+    checkEmailExists,
+    unlinkKakaoAccount,
     signOut,
     user,
     session,
