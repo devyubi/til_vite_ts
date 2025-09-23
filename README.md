@@ -1,5 +1,6 @@
 # Supabase 카카오 로그인
 
+- 이메일 가입 회원과 SNS(소셜 로그인) 가입 회원이 Email 이 겹치면 하나의 계정으로 자동 통합시킴.
 - 인증 환경 세팅은 자주 변경됨
 - 적용 시점에 다시 꼭 확인해야함.
 - 참조 자료 : https://www.youtube.com/watch?v=iWQEK8pS2kU
@@ -1699,8 +1700,1410 @@ export default ProfilePage;
 
 ## 5. 회원 가입 시 이메일 또는 카카오 이메일 중복 처리 방지
 
+- 이메일 회원은 반드시 이메일 및 닉네임 중복 체크 후 회원가입 승인 진행
+
+### 5.1 이메일과 닉네임 중복은 회원이 아닌 사람이 DB에 접근
+
+- 웹에서 DB로 접근하는 것이 아니고, 바로 DB에 접근하는 코드가 필요함.
+- DB 명령을 직접 실행하는 형태로 구성이 필요함 (많이 위험함 - 해킹위험이 있음)
+
+### 5.2 이메일 중복인지 아닌지 검토하는 SQL
+
+```sql
+-- Supabase 대시보드에서 SQL 에디터에 실행
+CREATE OR REPLACE FUNCTION check_email_exists(email_param text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER -- 함수 소유자 권한으로 실행 (RLS 우회)
+AS $$
+DECLARE
+  user_exists boolean;
+BEGIN
+  -- auth.users 테이블에서 이메일 확인
+  SELECT EXISTS(
+    SELECT 1 FROM auth.users
+    WHERE email = email_param
+  ) INTO user_exists;
+
+  RETURN json_build_object('exists', user_exists);
+END;
+$$;
+
+-- 익명 사용자도 이 함수를 실행할 수 있도록 권한 부여
+GRANT EXECUTE ON FUNCTION check_email_exists(text) TO anon, authenticated;
+```
+
+### 5.3 닉네임이 중복인지 아닌지 검토하는 SQL
+
+```sql
+-- Supabase 대시보드에서 SQL 에디터에 실행
+CREATE OR REPLACE FUNCTION check_nickname_exists(nickname_param text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER -- 함수 소유자 권한으로 실행 (RLS 우회)
+AS $$
+DECLARE
+  nickname_exists boolean;
+BEGIN
+  -- profiles 테이블에서 닉네임 확인 (대소문자 무시)
+  SELECT EXISTS(
+    SELECT 1 FROM profiles
+    WHERE LOWER(nickname) = LOWER(nickname_param)
+  ) INTO nickname_exists;
+
+  RETURN json_build_object('exists', nickname_exists);
+END;
+$$;
+
+-- 익명 사용자도 이 함수를 실행할 수 있도록 권한 부여
+GRANT EXECUTE ON FUNCTION check_nickname_exists(text) TO anon, authenticated;
+```
+
+### 5.4 제대로 PostgreSql Function 이 등록 되어있는지 확인
+
+- Supabase 대시보드 → API 메뉴 → Stored Procedures (프로시저 목록) 확인
+
+## 6. 화면 구성 및 코드 적용
+
+### 6.1. 이메일 및 닉네임 중복 체크
+
+- /src/pages/SignUpPage.tsx 업데이트
+
+```tsx
+import React, { useState } from 'react';
+import KakaoLoginButton from '../components/KakaoLoginButton';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+
+function SignUpPage() {
+  const { signUp, checkEmailExists, checkNicknameExists } = useAuth();
+
+  const [email, setEmail] = useState<string>('');
+  const [pw, setPw] = useState<string>('');
+
+  // 이메일 중복 확인 상태
+  const [emailCheckStatus, setEmailCheckStatus] = useState<
+    'idle' | 'checking' | 'available' | 'taken'
+  >('idle');
+
+  // 이메일 중복 확인 메세지
+  const [emailCheckMessage, setEmailCheckMessage] = useState<string>('');
+
+  // 닉네임 중복 확인 상태
+  const [nickNameCheckStatus, setNickNameCheckStatus] = useState<
+    'idle' | 'checking' | 'available' | 'taken'
+  >('idle');
+
+  // 닉네임 중복 확인 메세지
+  const [nickNameCheckMessage, setNickNameCheckMessage] = useState<string>('');
+
+  // 이메일 중복 확인 함수
+  const handleEmailCheck = async () => {
+    if (!email.trim()) {
+      setEmailCheckMessage('이메일을 입력해주세요');
+      setEmailCheckStatus('taken');
+      return;
+    }
+    // 입력된 글자가 Email 형식에 맞는지 정규표현식으로 검사
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setEmailCheckMessage('올바른 이메일 형식을 입력 해주세요');
+      setEmailCheckStatus('taken');
+      return;
+    }
+    setEmailCheckStatus('checking');
+    setEmailCheckMessage('이메일 중복 확인 중...');
+    try {
+      // DB 에 직접 이메일 글자를 보내고, 중복 확인을 진행함
+      const result = await checkEmailExists(email);
+      if (result.error) {
+        setEmailCheckMessage(`오류: ${result.error}`);
+        setEmailCheckStatus('taken');
+      } else if (result.exists) {
+        setEmailCheckMessage('이미 사용 중인 이메일 입니다.');
+        setEmailCheckStatus('taken');
+      } else {
+        setEmailCheckMessage('사용 가능한 이메일 입니다.');
+        setEmailCheckStatus('available');
+      }
+    } catch (error) {
+      setEmailCheckMessage('이메일 중복 확인 중 오류가 발생 했습니다.');
+      setEmailCheckStatus('taken');
+    }
+  };
+
+  // 닉네임 중복 확인 함수
+  const handleNickNameCheck = async () => {
+    if (!nickName.trim()) {
+      setNickNameCheckMessage('닉네임을 입력 해주세요.');
+      setNickNameCheckStatus('taken');
+      return;
+    }
+    if (nickName.trim().length < 2) {
+      setNickNameCheckMessage('닉네임은 2글자 이상 입력 해주세요.');
+      setNickNameCheckStatus('taken');
+      return;
+    }
+    setNickNameCheckMessage('닉네임 중복 확인 중...');
+    setNickNameCheckStatus('checking');
+    try {
+      // DB 에 직접 닉네임 글자를 보내고 중복 확인 진행함.
+      const result = await checkNicknameExists(nickName);
+      if (result.error) {
+        setNickNameCheckMessage(`오류: ${result.error}`);
+        setNickNameCheckStatus('taken');
+      } else if (result.exists) {
+        setNickNameCheckMessage('이미 사용 중인 닉네임 입니다.');
+        setNickNameCheckStatus('taken');
+      } else {
+        setNickNameCheckMessage('사용 가능한 닉네임 입니다.');
+        setNickNameCheckStatus('available');
+      }
+    } catch (error) {
+      setNickNameCheckMessage('닉네임 중복 확인 중 오류가 발생 했습니다.');
+      setNickNameCheckStatus('taken');
+    }
+  };
+
+  // 추가 정보 (닉네임)
+  const [nickName, setNickName] = useState<string>('');
+
+  const [msg, setMsg] = useState<string>('');
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    // 웹브라우저 갱신 막기
+    e.preventDefault();
+
+    if (!email.trim()) {
+      alert('이메일을 입력하세요.');
+      return;
+    }
+
+    if (!pw.trim()) {
+      alert('비밀번호를 입력하세요.');
+      return;
+    }
+    if (pw.length < 6) {
+      alert('비밀번호는 최소 6자입니다.');
+      return;
+    }
+
+    if (!nickName.trim()) {
+      alert('닉네임을 입력하세요.');
+      return;
+    }
+
+    // 회원가입 및 추가정보 입력하기
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password: pw,
+      options: {
+        // 회원 가입 후 이메일로 인증 확인시 리다이렉트 될 URL
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // 잠시 추가정보를 보관합니다.
+        // Supabase 에서 auth 에는 추가적인 정보를 저장하는 객체가 존재
+        // 공식적인 명칭이 metadata 라고 합니다.
+        // 이메일 인증 후에 프로필 생성 시에 사용하려고 보관
+        data: { nickName: nickName },
+      },
+    });
+
+    if (error) {
+      setMsg(`회원가입 오류 : ${error}`);
+    } else {
+      setMsg(
+        '회원가입이 성공했습니다. 이메일 인증 링크를 확인해주세요. 인증 완료 후 프로필이 자동으로 생성됩니다.',
+      );
+    }
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <h2 className="page-title">📚 회원가입</h2>
+        <p className="page-subtitle">새 계정을 만들어 보세요.</p>
+      </div>
+      <div className="card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">이메일</label>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              {/* 이메일 입력태그 */}
+              <input
+                type="email"
+                value={email}
+                onChange={e => {
+                  setEmail(e.target.value);
+                  if (emailCheckStatus !== 'idle') {
+                    setEmailCheckStatus('idle');
+                    setEmailCheckMessage('');
+                  }
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                    e.preventDefault();
+                    handleEmailCheck();
+                  }
+                }}
+                placeholder="이메일"
+                className="form-input"
+                required
+                style={{ flex: 1 }}
+              />
+              {/* 이메일 중복체크버튼태그 */}
+              <button
+                type="button"
+                onClick={handleEmailCheck}
+                disabled={emailCheckStatus === 'checking'}
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: emailCheckStatus === 'available' ? '#10b981' : '#478cfb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: emailCheckStatus === 'checking' ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  whiteSpace: 'nowrap',
+                  opacity: emailCheckStatus === 'checking' ? 0.6 : 1,
+                }}
+              >
+                {emailCheckStatus === 'checking' ? '확인중...' : '중복확인'}
+              </button>
+            </div>
+            {/* 이메일 체크 결과 메세지 영역 */}
+            {emailCheckMessage && (
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '14px',
+                  color:
+                    emailCheckStatus === 'available'
+                      ? '#10b981'
+                      : emailCheckStatus === 'taken'
+                        ? '#ef4444'
+                        : '#6b7280',
+                }}
+              >
+                {emailCheckStatus === 'checking' && '⏳ '}
+                {emailCheckStatus === 'available' && '✅ '}
+                {emailCheckStatus === 'taken' && '❌ '}
+                {emailCheckMessage}
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">비밀번호</label>
+            <input
+              type="password"
+              value={pw}
+              onChange={e => setPw(e.target.value)}
+              placeholder="비밀번호 (최소 6자)"
+              className="form-input"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">닉네임</label>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              {/* 닉네임 입력태그 */}
+              <input
+                type="text"
+                value={nickName}
+                onChange={e => {
+                  setNickName(e.target.value);
+                  if (nickNameCheckStatus !== 'idle') {
+                    setNickNameCheckStatus('idle');
+                    setNickNameCheckMessage('');
+                  }
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
+                    e.preventDefault();
+                    handleNickNameCheck();
+                  }
+                }}
+                placeholder="닉네임을 입력하세요."
+                className="form-input"
+                style={{ flex: 1 }}
+                required
+              />
+              {/* 닉네임 중복체크버튼태그 */}
+              <button
+                onClick={handleNickNameCheck}
+                disabled={nickNameCheckStatus === 'checking'}
+                type="button"
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: nickNameCheckStatus === 'available' ? '#10b981' : '#478cfb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: nickNameCheckStatus === 'checking' ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  whiteSpace: 'nowrap',
+                  opacity: nickNameCheckStatus === 'checking' ? 0.6 : 1,
+                }}
+              >
+                {nickNameCheckStatus === 'checking' ? '확인중...' : '중복확인'}
+              </button>
+            </div>
+            {/* 닉네임 체크 결과 메세지 영역 */}
+            {nickNameCheckMessage && (
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '14px',
+                  color:
+                    nickNameCheckStatus === 'available'
+                      ? '#10b981'
+                      : nickNameCheckStatus === 'taken'
+                        ? '#ef4444'
+                        : '#6b7280',
+                }}
+              >
+                {nickNameCheckStatus === 'checking' && '⏳ '}
+                {nickNameCheckStatus === 'available' && '✅ '}
+                {nickNameCheckStatus === 'taken' && '❌ '}
+                {nickNameCheckStatus}
+              </div>
+            )}
+          </div>
+          {/* 이메일 및 닉네임 중복 체크 요청 출력 및 회원 가입 */}
+          <button
+            type="submit"
+            className="btn btn-success btn-lg"
+            style={{
+              width: '100%',
+              opacity:
+                emailCheckStatus !== 'available' || nickNameCheckStatus !== 'available' ? 0.5 : 1,
+              cursor:
+                emailCheckStatus !== 'available' || nickNameCheckStatus !== 'available'
+                  ? 'not-allowed'
+                  : 'pointer',
+            }}
+            disabled={emailCheckStatus !== 'available' || nickNameCheckStatus !== 'available'}
+          >
+            {emailCheckStatus !== 'available' || nickNameCheckStatus !== 'available'
+              ? '이메일 및 닉네임 중복 확인 필요'
+              : '회원가입'}
+          </button>
+          {/* 중복 확인 상태 안내 */}
+          {(emailCheckStatus === 'idle' || nickNameCheckStatus === 'idle') && (
+            <div
+              style={{
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '4px',
+                fontSize: '14px',
+                color: '#92400e',
+                textAlign: 'center',
+              }}
+            >
+              ⚠️ 이메일 및 닉네임 중복 확인을 완료해주세요.
+            </div>
+          )}
+          {emailCheckStatus === 'taken' && (
+            <div
+              style={{
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#fee2e2',
+                border: '1px solid #ef4444',
+                borderRadius: '4px',
+                fontSize: '14px',
+                color: '#dc2626',
+                textAlign: 'center',
+              }}
+            >
+              ❌ 이미 사용 중인 이메일입니다. 다른 이메일을 사용하거나 해당 이메일로 로그인해주세요.
+            </div>
+          )}
+          {nickNameCheckStatus === 'taken' && (
+            <div
+              style={{
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: '#fee2e2',
+                border: '1px solid #ef4444',
+                borderRadius: '4px',
+                fontSize: '14px',
+                color: '#dc2626',
+                textAlign: 'center',
+              }}
+            >
+              ❌ 이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해주세요.
+            </div>
+          )}
+        </form>
+
+        {/* SNS 로그인 영역 */}
+        <div style={{ display: 'flex', alignItems: 'center', margin: 'var(--space-6) 0' }}>
+          <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--gray-300)' }} />
+          <span style={{ padding: '0 var(--space-4)', fontSize: '14px' }}>또는</span>
+          <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--gray-300)' }} />
+        </div>
+
+        {/* 카카오 로그인 버튼 : 오류 메시지는 사용자도 볼 수 있어야 함.*/}
+        <KakaoLoginButton onError={error => setMsg(`카카오 로그인 오류 : ${error}`)} />
+
+        {/* 메시지 출력 */}
+        {msg && (
+          <p
+            style={{
+              marginTop: 'var(--space-4)',
+              padding: 'var(--space-3)',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: msg.includes('성공') ? 'var(--success-50)' : '#fef2f2',
+              color: msg.includes('성공') ? 'var(--success-600)' : '#dc2626',
+              border: `1px solid ${msg.includes('성공') ? 'var(--success-600)' : '#dc2626'}`,
+            }}
+          >
+            {msg}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default SignUpPage;
+```
+
 - /src/contexts/AuthContext.tsx 업데이트 (이메일 중복 확인 기능 추가)
 
 ```tsx
+/**
+ * 주요기능
+ * - 사용자 세션관리
+ * - 로그인/회원가입/로그아웃
+ * - 사용자 인증 정보 상태 변경 감시
+ * - 전역 인증 상태를 컴포넌트에 반영
+ */
 
+import type { Session, User } from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
+import { supabase } from '../lib/supabase';
+import type { DeleteRequestInsert } from '../types/TodoTypes';
+
+// 1. 인증 컨텍스트 타입
+type AuthContextType = {
+  // 현재 사용자의 세션정보 (로그인 상태, 토큰)
+  session: Session | null;
+  // 현재 로그인 된 사용자 정보
+  user: User | null;
+  // 회원 가입 함수(이메일, 비밀번호) : 비동기라서
+  signUp: (email: string, password: string) => Promise<{ error?: string }>;
+  // 회원 로그인 함수(이메일, 비밀번호) : 비동기라서
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  // 이메일 중복 확인 함수
+  checkEmailExists: (email: string) => Promise<{ exists: boolean; error?: string }>;
+  // 닉네임 중복 확인 함수
+  checkNicknameExists: (nickname: string) => Promise<{ exists: boolean; error?: string }>;
+  // 카카오 로그인 함수
+  signInWithKakao: () => Promise<{ error?: string }>;
+  // 카카오 계정 연동 해제 함수
+  unlinkKakaoAccount: () => Promise<{ error?: string; success?: boolean; message?: string }>;
+
+  // 회원 로그아웃
+  signOut: () => Promise<void>;
+  // 회원정보 로딩 상태
+  loading: boolean;
+  // 회원탈퇴 기능
+  deleteAccount: () => Promise<{ error?: string; success?: boolean; message?: string }>;
+};
+
+// 2. 인증 컨텍스트 생성 (인증 기능을 컴포넌트에서 활용하게 해줌.)
+const AuthContext = createContext<AuthContextType | null>(null);
+
+// 3. 인증 컨텍스트 프로바이더
+export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
+  // 현재 사용자 세션
+  const [session, setSession] = useState<Session | null>(null);
+  // 현재 로그인한 사용자 정보
+  const [user, setUser] = useState<User | null>(null);
+  // 로딩 상태 추가 : 초기 실행시 로딩 시킴, true
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // 초기 세션 로드 및 인증 상태 변경 감시
+  useEffect(() => {
+    // 세션을 초기에 로딩을 한 후 처리 한다.
+    const loadSession = async () => {
+      try {
+        setLoading(true); // 로딩중
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session ? data.session : null);
+        setUser(data.session?.user ?? null);
+      } catch (error) {
+        console.log(error);
+      } finally {
+        // 로딩완료
+        setLoading(false);
+      }
+    };
+    loadSession();
+
+    // // 기존 세션이 있는지 확인
+    // supabase.auth.getSession().then(({ data }) => {
+    //   setSession(data.session ? data.session : null);
+    //   setUser(data.session?.user ?? null);
+    // });
+    // 인증상태 변경 이벤트를 체크(로그인, 로그아웃, 토큰 갱신 등의 이벤트 실시간 감시)
+    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+    });
+    // 컴포넌트가 제거되면 이벤트 체크 해제 : cleanUp
+    return () => {
+      // 이벤트 감시 해제.
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  // 회원 가입 함수(이메일, 비밀번호) : 비동기라서
+  const signUp: AuthContextType['signUp'] = async (email, password) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // 회원 가입 후 이메일로 인증 확인시 리다이렉트 될 URL
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      return { error: error.message };
+    }
+    // 우리는 이메일 확인을 활성화 시켰습니다.
+    // 이메일 확인 후 인증 전까지는 아무것도 넘어오지 않습니다.
+    return {};
+  };
+
+  // 회원 로그인 함수(이메일, 비밀번호) : 비동기라서
+  const signIn: AuthContextType['signIn'] = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password, options: {} });
+    if (error) {
+      return { error: error.message };
+    }
+    return {};
+  };
+
+  // 이메일 중복 확인 함수
+  // - 회원 가입시에 이메일을 먼저 파악 후, 회원가입 시도
+  // - 결과에 따라서 메시지를 다양하게 출력을 한다 라는 시나리오
+  // - 좀 위험한 것은 error.messge 를 문자열로 비교한 것이 좀 불안함.
+
+  const checkEmailExists: AuthContextType['checkEmailExists'] = async email => {
+    // PostgreSQL Function
+    try {
+      const { error, data } = await supabase.rpc('check_email_exists', { email_param: email });
+
+      if (error) {
+        return { exists: false, error: '이메일 확인 중 오류가 발생했습니다.' };
+      }
+      return { exists: data.exists };
+    } catch (err) {
+      console.log('이메일 중복 확인 오류', err);
+      return { exists: false, error: '이메일 중복 확인 중 오류가 발생했습니다.' };
+    }
+  };
+
+  // 닉네임 중복 확인 함수
+  const checkNicknameExists: AuthContextType['checkNicknameExists'] = async nickname => {
+    // PostgreSQL Function
+    try {
+      const { error, data } = await supabase.rpc('check_nickname_exists', {
+        nickname_param: nickname,
+      });
+      if (error) {
+        return { exists: false, error: '닉네임 확인 중 오류가 발생했습니다.' };
+      }
+      return { exists: data.exists };
+    } catch (err) {
+      console.log('닉네임 중복 확인 오류', err);
+      return { exists: false, error: '닉네임 중복 확인 중 오류가 발생했습니다.' };
+    }
+  };
+
+  // 카카오 로그인 함수
+  const signInWithKakao: AuthContextType['signInWithKakao'] = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: {
+        // 로그인 실행후 이동옵션
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    // 오류발생시 체크 해보자.
+    if (error) {
+      return { error: error.message };
+    }
+    console.log('카카오 로그인 성공 : ', data);
+    return {};
+  };
+
+  // 카카오 계정 연동 해제 함수
+  const unlinkKakaoAccount: AuthContextType['unlinkKakaoAccount'] = async () => {
+    try {
+      // 카카오 로그인 사용자인지 확인
+      if (user?.app_metadata.provider !== 'kakao') {
+        return { error: '카카오 로그인 사용자가 아닙니다.' };
+      }
+      // supabase 에서 카카오 계정 연동 해제
+      // 사용자의 카카오 identity 찾기
+      const kakaoIdentity = user.identities?.find(item => item.provider === 'kakao');
+      if (!kakaoIdentity) {
+        return { error: '카카오 계정 연동 정보를 찾을 수 없습니다.' };
+      }
+      // 사용자의 카카오 identity 찾기 성공
+      const { error } = await supabase.auth.unlinkIdentity(kakaoIdentity);
+      if (error) {
+        console.log(' 카카오 계정 연동 해제 실패:', error.message);
+        return { error: '카카오 계정 연동 해제에 실패하였습니다.' };
+      }
+      // 계정 해제에 성공했다면
+      return {
+        success: true,
+        message: '카카오 계정 연동이 해제되었습니다. 다시 로그인해주세요.',
+      };
+    } catch (err) {
+      console.log(`카카오 계정 연동 해제 오류 : `, err);
+      return { error: '카카오 계정 연동 해제 중 오류가 발생했습니다.' };
+    }
+  };
+
+  // 회원 로그아웃
+  const signOut: AuthContextType['signOut'] = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // 회원 탈퇴기능 (카카오 회원탈퇴 기능도 추가)
+  const deleteAccount: AuthContextType['deleteAccount'] = async () => {
+    try {
+      // 카카오 로그인 사용자 인지 확인
+      const isKakaoUser = user?.app_metadata.provider === 'kakao';
+
+      // 기존에 사용한 데이터들을 먼저 정리한다.
+      const { error: profileError } = await supabase.from('profiles').delete().eq('id', user?.id);
+      if (profileError) {
+        console.log('프로필 삭제 실패 : ', profileError.message);
+        return { error: '프로필 삭제에 실패했습니다.' };
+      }
+
+      // 탈퇴 신청 데이터 추가
+      // account_deletion_requests 에  Pending 으로 Insert 합니다.
+      // 등록할 삭제 데이터
+      const deleteInfo: DeleteRequestInsert = {
+        user_id: user?.id,
+        reason: isKakaoUser ? '카카오 회원 탈퇴 요청' : '사용자 요청',
+        status: 'pending',
+        user_email: user?.email as string,
+      };
+      const { error: deleteRequestsError } = await supabase
+        .from('account_deletion_requests')
+        .insert([{ ...deleteInfo }]);
+
+      if (deleteRequestsError) {
+        console.log('탈퇴 목록 추가에 실패 : ', deleteRequestsError.message);
+        return { error: '탈퇴 목록 추가에 실패했습니다.' };
+      }
+
+      // 혹시 SMTP 서버가 구축이 가능하다면 관리자에게 이메일 전송하는 자리
+
+      // 로그아웃 시켜줌.
+      await signOut();
+
+      return {
+        success: true,
+        message: isKakaoUser
+          ? '카카오 계정 연동이 해제되었습니다. 계정 삭제가 요청되었습니다.'
+          : '계정 삭제가 요청되었습니다. 관리자 승인 후 완전히 삭제됩니다.',
+      };
+    } catch (err) {
+      console.log('탈퇴 요청 기능 오류 : ', err);
+      return { error: '계정 탈퇴 처리 중 오류가 발생하였습니다.' };
+    }
+  };
+
+  const value: AuthContextType = {
+    signUp,
+    signIn,
+    checkEmailExists,
+    checkNicknameExists,
+    signInWithKakao,
+    unlinkKakaoAccount,
+    signOut,
+    user,
+    session,
+    loading,
+    deleteAccount,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+// const {signUp, signIn, signOut, user, session} = useAuth()
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('AuthContext 가 없습니다.');
+  }
+  return ctx;
+};
 ```
+
+### 6.2. 시나리오 1번 : 카카오 회원 가입 후 이메일 회원 가입하기
+
+### 6.3. 시나리오 2번 : 이메일 회원 가입 후 카카오 회원 가입하기
+
+### 6.4. 시나리오 3번 : 관리자는 탈퇴를 못한다 (근데 이건 if 문 넣으면 끝아닌가)
+
+## 7. 버그 수정
+
+- 카카오 로그인 시 인증코드가 제대로 작동 안되는 경우 발생
+- /src/lib/profile.ts
+
+```ts
+/**
+ * 사용자 프로필 관리
+ * - 프로필 생성
+ * - 프로필 정보 조회
+ * - 프로필 정보 수정
+ * - 프로필 정보 삭제
+ *
+ * 주의사항
+ * - 반드시 사용자 인증 후에만 프로필 생성
+ */
+
+import type { Profile, ProfileInsert, ProfileUpdate } from '../types/TodoTypes';
+import { supabase } from './supabase';
+
+// 사용자 프로필 생성
+const createProfile = async (newUserProfile: ProfileInsert): Promise<boolean> => {
+  try {
+    // 인증 상태 확인
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      console.log('프로필 생성 실패 : 인증되지 않은 사용자');
+      return false;
+    }
+    // 현재 사용자 ID와 프로필 ID가 일치 하는지 확인
+    if (sessionData.session.user.id !== newUserProfile.id) {
+      console.log('프로필 생성 실패 : 사용자 ID 불일치');
+      return false;
+    }
+    const { data, error } = await supabase.from('profiles').insert([{ ...newUserProfile }]);
+    if (error) {
+      console.log(`프로필 추가에 실패 : `, {
+        message: error.message,
+        detail: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      return false;
+    }
+    console.log(`프로필 생성 성공 : `, data);
+    return true;
+  } catch (error) {
+    console.log(`프로필 생성 오류 : ${error}`);
+    return false;
+  }
+};
+
+// 사용자 프로필 조회
+const getProfile = async (userId: string): Promise<Profile | null> => {
+  try {
+    const { error, data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (error) {
+      console.log(error.message);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+// 사용자 프로필 수정
+const updateProfile = async (editUserProfile: ProfileUpdate, userId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ...editUserProfile })
+      .eq('id', userId);
+    if (error) {
+      console.log(error.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// 사용자 프로필 삭제
+const deleteProfile = async (): Promise<any> => {
+  try {
+  } catch (error) {
+    console.log(`프로필 생성 오류 : ${error}`);
+  }
+};
+
+// 사용자 프로필 이미지 업로드
+const uploadAvatar = async (file: File, userId: string): Promise<string | null> => {
+  try {
+    // 파일 타입 검사
+    // 파일 형식 검증
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`지원하지 않는 파일 형식입니다. 허용 형식: ${allowedTypes.join(', ')}`);
+    }
+    // 파일 크기 검증 (5MB 제한)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw new Error(`파일 크기가 너무 큽니다. 최대 5MB까지 업로드 가능합니다.`);
+    }
+
+    // 기존에 만약 아바타 이미지가 있으면 무조건 삭제부터 한다.
+    const result = await cleanupUserAvatars(userId);
+    if (!result) {
+      console.log('파일 삭제에 실패했습니다.');
+    }
+
+    // 파일명이 중복되지 않도록 이름을 생성함.
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    // storage 에 bucket 이 존재하는지 검사
+    const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
+    if (bucketError) {
+      throw new Error(`Storage 버킷 확인 실패 : ${bucketError.message}`);
+    }
+    // bucket 들의 목록 전달 {} 형태로 나옴. user-images 라는 이름에 업로드
+    let profileImagesBucket = buckets.find(item => item.name === 'user-images');
+    if (!profileImagesBucket) {
+      throw new Error('user-images 버킷이 존재하지 않음. 버킷생성 필요.');
+    }
+    // 파일 업로드 : upload( 파일명, 실제파일, 옵션 )
+    const { data, error } = await supabase.storage.from('user-images').upload(filePath, file, {
+      cacheControl: '3600', // 3600초(1시간) 동안 파일 캐시 적용
+      upsert: false, // 동일한 파일명은 덮어씌운다.
+    });
+    if (error) {
+      throw new Error(`업로드 실패 : ${error.message}`);
+    }
+
+    // https 문자열로 주소를 알아내서 활용
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('user-images').getPublicUrl(filePath);
+    console.log(publicUrl);
+
+    return publicUrl;
+  } catch (error) {
+    throw new Error(`아바타 업로드 오류가 발생했습니다. : ${error}`);
+  }
+};
+// 아바타 이미지는 한장을 유지해야 하므로 모두 제거하는 기능 필요
+const cleanupUserAvatars = async (userId: string): Promise<boolean> => {
+  try {
+    const { data, error: listError } = await supabase.storage
+      .from('user-images')
+      .list('avatars', { limit: 1000 });
+    if (listError) {
+      console.log(`목록 요청 에러 : ${listError.message}`);
+      return false;
+    }
+    // userId 에 해당하는 것만 필터링 해서 삭제해야 함.
+    if (data && data.length > 0) {
+      const userFile = data.filter(item => item.name.startsWith(`${userId}-`));
+      if (userFile && userFile.length > 0) {
+        const filePath = userFile.map(item => `avatars/${item.name}`);
+        const { error: removeError } = await supabase.storage.from('user-images').remove(filePath);
+        if (removeError) {
+          console.log(`파일 삭제 에러 : ${removeError.message}`);
+          return false;
+        }
+        return true;
+      }
+    }
+    return true;
+  } catch (error) {
+    console.log(`아바타 이미지 전체삭제 오류 : ${error}`);
+    return false;
+  }
+};
+
+// 사용자 프로필 이미지 제거
+const removeAvatar = async (userId: string): Promise<boolean> => {
+  try {
+    // 현재 로그인한 사용자의 avatar_url 을 읽어와야 한다.
+    // 여기서 파일명을 추출함.
+    const profile = await getProfile(userId);
+    // 사용자가 avatar_url 이 없다면
+    if (!profile?.avatar_url) {
+      return true; // 작업완료
+    }
+    // 1. 만약 avatar_url 이 존재하면 이름 파악, 파일 삭제
+    let deleteSuccess = false;
+    try {
+      // url 의 파일명을 찾아야 함.(url 로 변환하면 path 와 파일구분 수월함)
+      const url = new URL(profile.avatar_url);
+      const pathParts = url.pathname.split('/');
+      const publicIndex = pathParts.indexOf('public');
+      if (publicIndex !== -1 && publicIndex + 1 < pathParts.length) {
+        const bucketName = pathParts[publicIndex + 1];
+        const filePath = pathParts.slice(publicIndex + 2).join('/');
+        // 실제로 찾아낸 bucketName 과 filePath 로 삭제
+        const { data, error } = await supabase.storage.from(bucketName).remove([filePath]);
+        if (error) {
+          throw new Error('파일을 찾았지만, 삭제에는 실패했습니다.');
+        }
+        // 파일 삭제 성공
+        deleteSuccess = true;
+      }
+    } catch (err) {
+      console.log(err);
+    }
+    // 2. 만약 avatar_url 을 제대로 파싱 못했다면?
+    if (!deleteSuccess) {
+      try {
+        // 전체 목록을 읽어옴
+        const { data: files, error: listError } = await supabase.storage
+          .from('user-images')
+          .list('avatars', { limit: 1000 });
+        if (!listError && files && files.length > 0) {
+          const userFiles = files.filter(item => item.name.startsWith(`${userId}-`));
+          if (userFiles.length > 0) {
+            const filePath = userFiles.map(item => `avatars/${item.name}`);
+            const { error } = await supabase.storage.from('user-images').remove(filePath);
+            if (!error) {
+              deleteSuccess = true;
+            }
+          }
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    }
+    return true;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// 내보내기
+export { createProfile, getProfile, updateProfile, deleteProfile, uploadAvatar, removeAvatar };
+```
+
+- 카카오 로그인 성공 후 리다이렉트 페이지에서 세션 정보를 못 읽는 경우 발생
+- /src/pages/AuthCallback.tsx
+
+```tsx
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { createProfile } from '../lib/profile';
+import { useNavigate } from 'react-router-dom';
+import type { ProfileInsert } from '../types/TodoTypes';
+
+/**
+ * - 인증 콜백 URL 처리
+ * - 사용자에게 인증 진행 상태 안내
+ * - 자동 인증 처리 완료 안내
+ */
+function AuthCallback() {
+  const [msg, setMsg] = useState<string>('인증 처리 중 ...');
+
+  // 카카오 로그인 시 대기 시간 테스트
+  const [countDown, setCountDown] = useState(0);
+  // 리다이렉트가 가능한지 아닌지 보관
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  // 강제로 이동하기 위한 처리
+  const navigate = useNavigate();
+
+  // 닉네임 추출
+  const extractNickname = (user: any, isKakaoLogin: boolean): string => {
+    let nickname = user.user_metadata.nickname;
+    if (isKakaoLogin && !nickname) {
+      nickname =
+        user.app_metadata.full_name ||
+        user.app_metadata.name ||
+        user.email?.split('@')[0] ||
+        '카카오사용자';
+    }
+    return nickname;
+  };
+
+  // 프로필 존재 확인
+  const checkExistingProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      return error ? null : data;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // 메세지 전용 함수
+  const setLoginMessage = (loginType: string, action: string, success: boolean) => {
+    const emoji = success ? '🥰' : '😞';
+    const status = success ? '성공' : '실패';
+    setMsg(
+      `${emoji} ${loginType} 완료. ${action} ${status}! ${success ? '홈으로 이동하세요. ^^' : '관리자에게 문의하세요.'}`,
+    );
+    if (success) setShouldRedirect(true);
+  };
+
+  // OAuth 콜백에서 세션 설정
+  const handleOAuthCallback = async (): Promise<void> => {
+    try {
+      // URL에서 OAuth 파라미터 확인 (Query String과 Fragment 모두 확인)
+      const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+
+      const code = urlParams.get('code') || hashParams.get('code');
+      const error = urlParams.get('error') || hashParams.get('error');
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      // console.log('OAuth 파라미터:', {
+      //   code: !!code,
+      //   error,
+      //   accessToken: !!accessToken,
+      //   refreshToken: !!refreshToken,
+      //   fullUrl: window.location.href,
+      //   search: window.location.search,
+      //   hash: window.location.hash,
+      // });
+
+      if (error) {
+        setMsg(`OAuth 오류: ${error}`);
+        return;
+      }
+
+      if (code) {
+        // OAuth 코드가 있으면 세션 교환
+        const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        if (sessionError) {
+          setMsg(`세션 교환 오류: ${sessionError.message}`);
+          return;
+        }
+        console.log('OAuth 세션 교환 성공:', data);
+      } else if (accessToken && refreshToken) {
+        // Fragment에서 직접 토큰이 있는 경우 세션 설정
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          setMsg(`세션 설정 오류: ${sessionError.message}`);
+          return;
+        }
+        console.log('Fragment 세션 설정 성공:', data);
+      } else {
+        // OAuth 파라미터가 없는 경우, Supabase가 자동으로 처리했을 수 있음
+        console.log('OAuth 파라미터 없음 - Supabase 자동 처리 확인');
+      }
+    } catch (err) {
+      console.error('OAuth 콜백 처리 오류:', err);
+    }
+  };
+
+  // 인증 콜백 처리
+  const handleAuthCallback = async (): Promise<void> => {
+    try {
+      // 먼저 OAuth 콜백 처리
+      await handleOAuthCallback();
+      // 세션 확인 (여러 번 시도)
+      let sessionData = null;
+      let attempts = 0;
+      const maxAttempts = 5; // 시도 횟수
+
+      while (attempts < maxAttempts) {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          setMsg(`인증 오류 : ${error.message}`);
+          return;
+        }
+        if (data.session?.user) {
+          sessionData = data;
+          break;
+        }
+        attempts++;
+        if (attempts < maxAttempts) {
+          // 1초 대기 후 재시도
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!sessionData?.session.user) {
+        setMsg('🥰 인증 정보 자체가 없습니다. 다시 가입해주세요.');
+        return;
+      }
+
+      const user = sessionData.session.user;
+      // 카카오로 로그인 했는지 확인 필요 (kakao 는 Supabase 에서 정한 글자)
+      const isKakaoLogin = user.app_metadata.provider === 'kakao';
+      const loginType = isKakaoLogin ? '카카오 로그인' : '이메일 인증';
+
+      // 카카오 로그인 이메일 중복 확인 (임시 비활성화)
+      if (isKakaoLogin && user.email) {
+        console.log('카카오 로그인 - 이메일 중복 확인 비활성화');
+        console.log(user.email);
+      }
+
+      // 닉네임 추출
+      const nickname = extractNickname(user, isKakaoLogin);
+
+      // 프로필 존재 확인
+      const existingProfile = await checkExistingProfile(user.id);
+
+      if (!existingProfile && nickname) {
+        // 프로필 생성
+        const newProfile: ProfileInsert = { id: user.id, nickname };
+        const result = await createProfile(newProfile);
+        setLoginMessage(loginType, '프로필 생성', result);
+      } else if (existingProfile && nickname) {
+        // 프로필 업데이트
+        try {
+          // 현재 프로필
+          const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('nickname')
+            .eq('id', user.id)
+            .single();
+
+          if (currentProfile?.nickname !== nickname && nickname.trim()) {
+            const { data, error: updateError } = await supabase
+              .from('profiles')
+              .update({ nickname })
+              .eq('id', user.id);
+
+            setLoginMessage(loginType, '프로필 업데이트', !updateError);
+          } else {
+            setLoginMessage(loginType, '인증', true);
+          }
+        } catch (error) {
+          setLoginMessage(loginType, '인증', true);
+        }
+      } else {
+        setLoginMessage(loginType, '인증', true);
+      }
+    } catch (err) {
+      console.log(`인증 콜백 함수 처리 오류 : ${err}`);
+      setMsg('🥰 인증 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    // setTimeout 은 1초 뒤에 함수 실행
+    const timer = setTimeout(handleAuthCallback, 1000);
+    // 클린업 함수
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [handleAuthCallback]);
+
+  // 리다이렉트 처리 useEffect
+  useEffect(() => {
+    if (shouldRedirect) {
+      // 사용자 이동에 대한 테스트를 위해서.
+      setCountDown(3);
+      const timer = setInterval(() => {
+        setCountDown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer); // 타이머 중지 시킴
+            navigate('/todos'); // 강제로 이동시킴
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // 클린업 함수
+      return () => clearInterval(timer);
+    }
+  }, [shouldRedirect, navigate]);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        backgroundColor: '#f9fafb',
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#fff',
+          padding: '32px',
+          borderRadius: '8px',
+          maxWidth: '448px',
+          width: '100%',
+          margin: '0 16px',
+          textAlign: 'center',
+        }}
+      >
+        <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '24px', color: '#1f2937' }}>
+          인증 페이지
+        </h2>
+        <div style={{ marginBottom: '16px', color: '#374151' }}>{msg}</div>
+        {/* 카운트다운 표시 */}
+        {countDown && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '16px',
+              backgroundColor: '#eff6ff',
+              borderRadius: '8px',
+            }}
+          >
+            <p
+              style={{
+                color: '#1d4ed8',
+                fontWeight: '500',
+              }}
+            >
+              {countDown}초 후 todos 페이지로 이동합니다...
+            </p>
+            <div style={{ marginTop: '8px' }}>
+              <div
+                style={{
+                  width: '100%',
+                  backgroundColor: '#dbeafe',
+                  borderRadius: '9999px',
+                  height: '8px',
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor: '#3b82f6',
+                    height: '8px',
+                    borderRadius: '9999px',
+                    transition: 'width 1s ease',
+                    width: `${((3 - countDown) / 3) * 100}%`,
+                  }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default AuthCallback;
+```
+
+## 8. 기능 보완
+
+- 카카오 로그인 및 회원가입 성공시 메세지 출력
+- /src/pages/SignUpPage.tsx 업데이트
+
+```tsx
+{
+  /* 카카오 로그인 버튼 : 오류 메시지는 사용자도 볼 수 있어야 함.*/
+}
+<KakaoLoginButton
+  onError={error => setMsg(`카카오 로그인 오류 : ${error}`)}
+  onSuccess={message => setMsg(message)}
+/>;
+```
+
+- KakaoLoginButton.tsx 업데이트
+
+```tsx
+import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
+
+// 오류 메시지를 사용한 화면에 보여줄 함수
+interface KakaoLoginButtonProps {
+  children?: React.ReactNode;
+  onError?: (error: string) => void;
+  onSuccess?: (message: string) => void;
+}
+const KakaoLoginButton = ({ onError, onSuccess }: KakaoLoginButtonProps) => {
+  // 카카오 로그인 사용
+  const { signInWithKakao } = useAuth();
+  // 카카오 로그인 실행
+  const handleKakaoLogin = async () => {
+    try {
+      const { error } = await signInWithKakao();
+
+      if (error) {
+        console.log('카카오로그인 에러 메시지 : ', error);
+        if (onError) {
+          onError(error);
+        }
+      } else {
+        console.log('카카오 로그인 성공');
+        if (onSuccess) {
+          onSuccess('카카오 로그인이 성공했습니다.');
+        }
+      }
+    } catch (err) {
+      console.log('카카오 로그인 오류 : ', err);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        width: '100%',
+        padding: '12px 16px',
+        backgroundColor: '#fee500',
+        color: '#000',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '16px',
+        fontWeight: '500',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s ease',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.backgroundColor = '#fdd835';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.backgroundColor = '#fee500';
+      }}
+      onClick={handleKakaoLogin}
+    >
+      {/* 카카오 아이콘 SVG */}
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M12 3C6.48 3 2 6.48 2 10.5C2 13.52 4.5 16.1 8 17.5L7 21L10.5 18.5C11.3 18.7 12.1 18.8 13 18.8C18.52 18.8 23 15.32 23 11.3C23 7.28 18.52 3.8 13 3.8C12.7 3.8 12.4 3.8 12.1 3.9C12.1 3.6 12 3.3 12 3Z"
+          fill="currentColor"
+        />
+      </svg>
+      카카오 로그인
+    </button>
+  );
+};
+
+export default KakaoLoginButton;
+```
+
+### 6.4. 비밀번호 변경하기 또는 비밀번호 찾기

@@ -19,66 +19,177 @@ function AuthCallback() {
   // 강제로 이동하기 위한 처리
   const navigate = useNavigate();
 
-  // 사용자가 이메일 확인 클릭하면 실행되는 곳
-  // 인증 정보에 담겨진 nickname 을 알아내서 여기서 profiles 를 추가
-  const handleAuthCallback = async (): Promise<void> => {
+  // 닉네임 추출
+  const extractNickname = (user: any, isKakaoLogin: boolean): string => {
+    let nickname = user.user_metadata.nickname;
+    if (isKakaoLogin && !nickname) {
+      nickname =
+        user.app_metadata.full_name ||
+        user.app_metadata.name ||
+        user.email?.split('@')[0] ||
+        '카카오사용자';
+    }
+    return nickname;
+  };
+
+  // 프로필 존재 확인
+  const checkExistingProfile = async (userId: string) => {
     try {
-      // URL에서 세션(웹브라우저 정보시 사라지는 데이터)에 담겨진 정보를 가져옮
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single();
+      return error ? null : data;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // 메세지 전용 함수
+  const setLoginMessage = (loginType: string, action: string, success: boolean) => {
+    const emoji = success ? '🥰' : '😞';
+    const status = success ? '성공' : '실패';
+    setMsg(
+      `${emoji} ${loginType} 완료. ${action} ${status}! ${success ? '홈으로 이동하세요. ^^' : '관리자에게 문의하세요.'}`,
+    );
+    if (success) setShouldRedirect(true);
+  };
+
+  // OAuth 콜백에서 세션 설정
+  const handleOAuthCallback = async (): Promise<void> => {
+    try {
+      // URL에서 OAuth 파라미터 확인 (Query String과 Fragment 모두 확인)
+      const urlParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+
+      const code = urlParams.get('code') || hashParams.get('code');
+      const error = urlParams.get('error') || hashParams.get('error');
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      // console.log('OAuth 파라미터:', {
+      //   code: !!code,
+      //   error,
+      //   accessToken: !!accessToken,
+      //   refreshToken: !!refreshToken,
+      //   fullUrl: window.location.href,
+      //   search: window.location.search,
+      //   hash: window.location.hash,
+      // });
+
       if (error) {
-        setMsg(`인증 오류 : ${error.message}`);
+        setMsg(`OAuth 오류: ${error}`);
         return;
       }
-      // 인증 데이터가 존재함.
-      if (data.session?.user) {
-        const user = data.session.user;
 
-        // 카카오로 로그인 했는지 확인 필요 (kakao 는 Supabase 에서 정한 글자)
-        const isKakaoLogin = user.app_metadata.provider === 'kakao';
-
-        // 추가적인 정보 파악 가능 (metadata 라고 함.)
-        let nickName = user.user_metadata.nickName;
-
-        // 카카오 로그인인 경우 카카오에서 제공하는 정보를 사용함.
-        if (isKakaoLogin && !nickName) {
-          nickName =
-            user.app_metadata.full_name ||
-            user.app_metadata.name ||
-            user.email?.split('@')[0] ||
-            '카카오사용자';
+      if (code) {
+        // OAuth 코드가 있으면 세션 교환
+        const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        if (sessionError) {
+          setMsg(`세션 교환 오류: ${sessionError.message}`);
+          return;
         }
+        console.log('OAuth 세션 교환 성공:', data);
+      } else if (accessToken && refreshToken) {
+        // Fragment에서 직접 토큰이 있는 경우 세션 설정
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          setMsg(`세션 설정 오류: ${sessionError.message}`);
+          return;
+        }
+        console.log('Fragment 세션 설정 성공:', data);
+      } else {
+        // OAuth 파라미터가 없는 경우, Supabase가 자동으로 처리했을 수 있음
+        console.log('OAuth 파라미터 없음 - Supabase 자동 처리 확인');
+      }
+    } catch (err) {
+      console.error('OAuth 콜백 처리 오류:', err);
+    }
+  };
 
-        // 먼저 프로필이 이미 존재하는지 확인이 필요
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', user.id)
-          .single();
+  // 인증 콜백 처리
+  const handleAuthCallback = async (): Promise<void> => {
+    try {
+      // 먼저 OAuth 콜백 처리
+      await handleOAuthCallback();
+      // 세션 확인 (여러 번 시도)
+      let sessionData = null;
+      let attempts = 0;
+      const maxAttempts = 5; // 시도 횟수
 
-        // 존재하지 않는 id 이고, nickName 내용이 있다면
-        // profiles 에 insert 한다.
-        if (!existingProfile && nickName) {
-          // 프롤필이 없고 닉네임이 존재하므로 프로필 생성하자.
-          const newProfile: ProfileInsert = { id: user.id, nickname: nickName };
-          const result = await createProfile(newProfile);
-          if (result) {
-            // 로그인 타입으로 메세지 만들기
-            const loginType = isKakaoLogin ? '카카오 로그인' : '이메일 인증';
-            setMsg(`🥰 ${loginType} 완료. 프로필생 생성 성공! 홈으로 이동하세요. ^^`);
-            // 리다이렉트 플래그 설정
-            setShouldRedirect(true);
+      while (attempts < maxAttempts) {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          setMsg(`인증 오류 : ${error.message}`);
+          return;
+        }
+        if (data.session?.user) {
+          sessionData = data;
+          break;
+        }
+        attempts++;
+        if (attempts < maxAttempts) {
+          // 1초 대기 후 재시도
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!sessionData?.session.user) {
+        setMsg('🥰 인증 정보 자체가 없습니다. 다시 가입해주세요.');
+        return;
+      }
+
+      const user = sessionData.session.user;
+      // 카카오로 로그인 했는지 확인 필요 (kakao 는 Supabase 에서 정한 글자)
+      const isKakaoLogin = user.app_metadata.provider === 'kakao';
+      const loginType = isKakaoLogin ? '카카오 로그인' : '이메일 인증';
+
+      // 카카오 로그인 이메일 중복 확인 (임시 비활성화)
+      if (isKakaoLogin && user.email) {
+        console.log('카카오 로그인 - 이메일 중복 확인 비활성화');
+        console.log(user.email);
+      }
+
+      // 닉네임 추출
+      const nickname = extractNickname(user, isKakaoLogin);
+
+      // 프로필 존재 확인
+      const existingProfile = await checkExistingProfile(user.id);
+
+      if (!existingProfile && nickname) {
+        // 프로필 생성
+        const newProfile: ProfileInsert = { id: user.id, nickname };
+        const result = await createProfile(newProfile);
+        setLoginMessage(loginType, '프로필 생성', result);
+      } else if (existingProfile && nickname) {
+        // 프로필 업데이트
+        try {
+          // 현재 프로필
+          const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('nickname')
+            .eq('id', user.id)
+            .single();
+
+          if (currentProfile?.nickname !== nickname && nickname.trim()) {
+            const { data, error: updateError } = await supabase
+              .from('profiles')
+              .update({ nickname })
+              .eq('id', user.id);
+
+            setLoginMessage(loginType, '프로필 업데이트', !updateError);
           } else {
-            const loginType = isKakaoLogin ? '카카오 로그인' : '이메일 인증';
-            setMsg(`🥰 ${loginType} 인증 완료. 프로필이 생성 실패! 관리자에게 문의하세요.`);
+            setLoginMessage(loginType, '인증', true);
           }
-        } else {
-          const loginType = isKakaoLogin ? '카카오 로그인' : '이메일 인증';
-          setMsg(`🥰 ${loginType}  인증 완료. 홈으로 이동하세요. ^^`);
-          // 리다이렉트 플래그 설정
-          setShouldRedirect(true);
+        } catch (error) {
+          setLoginMessage(loginType, '인증', true);
         }
       } else {
-        setMsg('🥰 인증 정보 자체가 없습니다. 다시 가입해주세요.');
+        setLoginMessage(loginType, '인증', true);
       }
     } catch (err) {
       console.log(`인증 콜백 함수 처리 오류 : ${err}`);
