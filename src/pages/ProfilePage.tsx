@@ -12,7 +12,8 @@ import Loading from '../components/Loading';
  */
 function ProfilePage() {
   // 회원 기본 정보 (카카오, 구글 회원 탈퇴 추가)
-  const { user, deleteAccount, unlinkKakaoAccount, unlinkGoogleAccount } = useAuth();
+  const { user, deleteAccount, unlinkKakaoAccount, unlinkGoogleAccount, changePassword } =
+    useAuth();
   // 데이터 가져오는 동안의 로딩
   const [loading, setLoading] = useState<boolean>(true);
   // 사용자 프로필
@@ -37,6 +38,11 @@ function ProfilePage() {
   const [imageRemovalRequest, setImageRemovalReauest] = useState<boolean>(false);
   // input type="file" 태그 참조
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 비밀번호 변경 관련 상태
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [passwordMessage, setPasswordMessage] = useState<string>('');
 
   // 사용자 프로필 정보 가져오기
   const loadProfile = async () => {
@@ -143,7 +149,7 @@ function ProfilePage() {
     }
   };
 
-  // 카카오 계정 연동 해제 (회원 탈퇴)
+  // 구글 계정 연동 해제 (회원 탈퇴)
   const handleUnlinkGoogle = async () => {
     const message =
       '구글 계정 연동을 해제 하시겠습니까? \n\n 연동 해제 후 구글로 다시 로그인이 불가능 합니다.';
@@ -158,6 +164,40 @@ function ProfilePage() {
       } else if (result.error) {
         alert(`연동 해제 실패: ${result.error}`);
       }
+    }
+  };
+
+  // 비밀번호 변경
+  const handlePasswordChange = async () => {
+    // 입력값 검증
+    if (!newPassword.trim()) {
+      setPasswordMessage('새로운 비밀번호를 입력해주세요.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMessage('비밀번호는 최소 6자 이상이어야 합니다.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    try {
+      const result = await changePassword(newPassword);
+      if (result.success) {
+        setPasswordMessage('비밀번호가 성공적으로 변경되었습니다.');
+        // 폼 초기화
+        setNewPassword('');
+        setConfirmPassword('');
+        // 3초 후 메세지 자동으로 제거
+        setTimeout(() => {
+          setPasswordMessage('');
+        }, 3000);
+      } else if (result.error) {
+        setPasswordMessage(`비밀번호 변경 실패 : ${result.error}`);
+      }
+    } catch (err) {
+      setPasswordMessage('비밀번호 변경 중 오류가 발생했습니다.');
     }
   };
 
@@ -385,6 +425,57 @@ function ProfilePage() {
                 placeholder="닉네임을 입력하세요."
               />
             </div>
+
+            {/* 이메일 로그인 사용자에게만 비밀번호 변경 섹션 표시 */}
+            {(!user?.app_metadata.provider || user?.app_metadata.provider === 'email') && (
+              <div className="form-group">
+                <label className="form-label">🔒 비밀번호 변경</label>
+                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="새 비밀번호(최소 6자)"
+                    className="form-input"
+                    style={{ flex: 1 }}
+                  />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="비밀번호 확인"
+                    className="form-input"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={handlePasswordChange}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    변경
+                  </button>
+                </div>
+                {/* 비밀번호 변경 메세지 */}
+                {passwordMessage && (
+                  <div
+                    style={{
+                      marginTop: 'var(--space-2)',
+                      padding: 'var(--space-2)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '14px',
+                      backgroundColor: passwordMessage.includes('성공')
+                        ? 'var(--success-50)'
+                        : '#fef2f2',
+                      color: passwordMessage.includes('성공') ? 'var(--success-600)' : '#dc2626',
+                      border: `1px solid ${passwordMessage.includes('성공') ? 'var(--success-600)' : '#dc2626'}`,
+                    }}
+                  >
+                    {passwordMessage}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label">아바타 편집</label>
               <div style={{ marginBottom: 'var(--space-4)' }}>
