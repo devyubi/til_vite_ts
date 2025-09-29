@@ -6,12 +6,13 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useDirectChat } from '../../../contexts/DirectChatContext';
 
 // props 정의
 interface DirectChatListProps {
   onChatSelect: (chatId: string) => void; // 채팅 방 선택 시 호출되는 콜백 함수
   onCreateChat: () => void; // 새 채팅방 생성 시 호출되는 콜백 함수
-  setSelectedChatId?: string | null; // 현재 선택된 채팅방의 ID
+  selectedChatId?: string; // 현재 선택된 채팅방의 ID
 }
 
 // 사용자 검색 시 생성 되어지는 객체 형태의 모양
@@ -19,20 +20,21 @@ interface ChatUser {
   id: string; // 사용자 고유 식별자 (uuid)
   email: string; // 사용자 이메일 주소
   nickname: string; // 표시용 닉네임
-  avatar_url?: string; // 프로필 이미지 URL (선택사항)
+  avatar_url?: string | null; // 프로필 이미지 URL (선택사항)
 }
 
-const DrirectChatList = ({
-  onChatSelect,
-  onCreateChat,
-  setSelectedChatId,
-}: DirectChatListProps) => {
-  // DB에서 읽어온 데이터를 관리함 : 여러 곳에서 활용하는 데이터 이므로 Context 를 활용 예정
-  const [users, setUsers] = useState<ChatUser[]>([]);
+const DrirectChatList = ({ onChatSelect, onCreateChat, selectedChatId }: DirectChatListProps) => {
+  // context 활용
+  const { loadChats, createDirectChat, error, users } = useDirectChat();
 
   // 사용자 검색 상태 관리
   const [searchTerm, setSearchTerm] = useState<string>(''); // 사용자 검색어
   const [showUserSearch, setShowUserSearch] = useState<boolean>(false); // 사용자 검색 UI 표시 여부
+
+  // 최초에 컴포넌트 마운트시 채팅 목록 로드
+  useEffect(() => {
+    loadChats();
+  }, [loadChats]); // 신규 또는 메세지 전송 등으로 업데이트 시 채팅 목록 호출
 
   // 컴포넌트가 변경 시, 사용자 검색 즉시 실행
   // 검색어가 비어있지 않을 때만 검색 수행
@@ -52,13 +54,28 @@ const DrirectChatList = ({
    * 3. 사용자 검색 UI 숨김
    * 4. 사용자 검색어 초기화
    */
-  const handleUserSelect = () => {
-    // 사용자 선택됨
-    // 사용자의 ID 를 이용해서 채팅방을 생성해야 함
-    onChatSelect(user.id); // 새로운 채팅방 생성
-    setShowUserSearch(false); // 사용자 검색 UI 숨기기
-    setSearchTerm(''); // 검색어 초기화
+  const handleUserSelect = async (user: ChatUser) => {
+    // 상대방 선택됨.
+    // 상대방의 id 를 이용해서 채팅방을 생성해야 합니다.
+    const chatId = await createDirectChat(user.id);
+    if (chatId) {
+      onChatSelect(user.id); // 새로운 채팅방 생성
+      setShowUserSearch(false); // 사용자 검색 UI 숨기기
+      setSearchTerm(''); // 검색어 초기화
+    }
   };
+
+  // 에러 상태일 때 에러 메세지 표시
+  if (error) {
+    return (
+      <div>
+        <div>
+          <p>오류 : {error}</p>
+          <button onClick={loadChats}>다시 시도</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="chat-list">

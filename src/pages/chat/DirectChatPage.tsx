@@ -42,7 +42,7 @@ function DirectChatPage() {
           <DrirectChatList
             onChatSelect={handleChatSelect} // 채팅방 선택 시 호출되는 콜백 함수
             onCreateChat={handleCreateChat} // 새 채팅방 생성 시 호출되는 콜백 함수
-            setSelectedChatId={setSelectedChatId || undefined} // 현재 선택된 채팅방 ID
+            selectedChatId={selectedChatId || undefined} // 현재 선택된 채팅방 ID
           />
         </div>
         {/* 오른쪽 메인 영역 - 채팅방 또는 환영 화면 표시하기 */}

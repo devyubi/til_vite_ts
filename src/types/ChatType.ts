@@ -1,32 +1,33 @@
-// 1:1 채팅을 위한 타입
+// 1 : 1 채팅을 위한 타입
+// 사용자 정보
 export interface ChatUser {
   id: string; // 사용자 고유 식별자 (UUID)
   email: string; // 사용자 이메일 주소
   nickname: string; // 표시용 닉네임
-  avatar_url?: string; // 프로필 이미지 URL (선택)
+  avatar_url?: string | null; // 프로필 이미지 URL (선택사항)
 }
 
-// 채팅 정보 타입
+// 채팅 정보
 export interface Chat {
   id: string; // 채팅방 고유 식별자 (UUID)
   name: string; // 채팅방 이름
-  type: 'direct'; // direct (1:1) | group 채팅 : 현재는 1:1만 지원
+  type: 'direct'; // 채팅방 타입 (direct | group) : 현재는 1:1 만 지원
   created_by: string; // 채팅방 생성한 유저의 ID
-  created_at: string; // 생성 시간
-  updated_at: string; // 마지맞 업데이트 시간
+  created_at: string; // 채팅방 생성시간
+  updated_at: string; // 마지막 업데이트 시간
 }
 
-// 메세지 정보 타입
+// 메시지 정보
 export interface Message {
-  id: string; // 메세지 고유 식별자
+  id: string; // 메시지 고유 식별자 (UUID)
   chat_id: string; // 채팅방 ID
-  sender_id: string; // 발신자 사용자 ID
-  created_by: string; // 메세지 내용
+  sender_id: string; // 발신자 ID
+  content: string; // 메시지 내용
   created_at: string; // 전송 시간
-  updated_at: string; // 수정 시간 (편집 시)
+  updated_at: string; // 수정 시간
 }
 
-// 메세지의 상세 추가 확장 정보
+// 메시지의 상세 추가 확장 정보
 export interface MessageDetail extends Message {
   sender: ChatUser;
 }
@@ -37,12 +38,32 @@ export interface ChatListItem {
   name: string; // 채팅방 이름
   type: 'direct'; // 채팅방 타입
   last_message?: {
-    // 마지막 메세지 정보 (선택사항 - 첫 채팅시엔 없으니까.)
+    // 마지막 메시지 정보(선택사항)
     content: string; // 내용
     created_at: string; // 작성시간
     sender_nickname: string; // 보낸사람 닉네임
   };
   other_user: ChatUser; // 상대방 사용자 정보
-  unread_count: number; // 읽지 않은 메세지 수
-  updated_at: string; // 마지막 업데이트 시간
+  unread_count: number; // 읽지 않은 메시지 수
+  updated_at: string; //  마지막 에ㅓㅂ데이트 시간
+}
+
+// 채팅방 생성용
+export interface CreateChatData {
+  name: string; // 채팅방 이름
+  type: 'direct'; // 채팅방 타입 (direct | group)
+  participant_id: string; // 참여자 ID
+}
+
+// 메세지 전송용
+export interface CreateMessageData {
+  chat_id: string; // 채팅방 ID
+  content: string; // 메시지 내용
+}
+
+// API 응답 래퍼
+export interface ChatApiResponse<T> {
+  success: boolean; // 성공 여부
+  data?: T; // 응답 데이터 (제네릭 타입)
+  error?: string; // 에러 메시지(실패시)
 }
