@@ -41,10 +41,9 @@ const mockUser: ChatUser[] = [
 
 /**
  * Mock 채팅방 목록 데이터
- *  - 실제로는 Supabase 의 ??? (추후 결정) 테이블에서 가져올 데이터 샘플
- *  - 각 목록에는 마지막 메세지, 읽지 않는 메세지 수, 상대방 정보 포함
+ *  실제로는 Supabase 의 채팅목록 테이블에서 가져올 데이터 샘플
+ *  각 목록에는 마지막 메시지, 읽지 않는 메시지 수, 상대방 정보 포함
  */
-
 const mockChats: ChatListItem[] = [
   {
     id: 'chat1',
@@ -53,26 +52,26 @@ const mockChats: ChatListItem[] = [
     // 마지막 메시지 정보(선택사항)
     last_message: {
       content: '안녕하세요!', // 내용
-      created_at: 'new Date(Date.now() - 1000 * 60 * 30).toISOString()', // 작성시간
+      created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 작성시간
       sender_nickname: '김철수', // 보낸사람 닉네임
     },
     other_user: mockUser[0], // 상대방 사용자 정보
     unread_count: 2, // 읽지 않은 메시지 수
-    updated_at: 'new Date(Date.now() - 1000 * 60 * 30).toISOString()', // 마지막 업데이트 시간
+    updated_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 마지막 업데이트 시간
   },
   {
-    id: 'chat1',
-    name: '고영희', // 채팅방 이름인데 1:1 이라서 상대방 닉네임으로
+    id: 'chat2',
+    name: '이영희', // 채팅방 이름인데 1:1 이라서 상대방 닉네임으로
     type: 'direct', // 채팅 타입
     // 마지막 메시지 정보(선택사항)
     last_message: {
-      content: '오늘 날씨가 좋네요ㅋㅎㅋㅎ', // 내용
-      created_at: 'new Date(Date.now() - 1000 * 60 * 30).toISOString()', // 작성시간
-      sender_nickname: '고영희', // 보낸사람 닉네임
+      content: '오늘 날씨가 좋네요^^', // 내용
+      created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 작성시간
+      sender_nickname: '이영희', // 보낸사람 닉네임
     },
     other_user: mockUser[2], // 상대방 사용자 정보
     unread_count: 0, // 읽지 않은 메시지 수
-    updated_at: 'new Date(Date.now() - 1000 * 60 * 30).toISOString()', // 마지막 업데이트 시간
+    updated_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 마지막 업데이트 시간
   },
 ];
 
