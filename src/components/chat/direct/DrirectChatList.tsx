@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useDirectChat } from '../../../contexts/DirectChatContext';
 import type { ChatUser } from '../../../types/ChatType';
+import { supabase } from '../../../lib/supabase';
 
 // props 정의
 interface DirectChatListProps {
@@ -29,6 +30,31 @@ const DrirectChatList = ({ onChatSelect, onCreateChat, selectedChatId }: DirectC
   useEffect(() => {
     loadChats();
   }, [loadChats]); // 신규 또는 메세지 전송 등으로 업데이트 시 채팅 목록 호출
+
+  // Supabase Realtime 으로 실시간 동기화
+  useEffect(() => {
+    const subscription = supabase // direct_chats_changes 라는 이름으로 채널을 만든다
+      .channel('direct_chats_changes')
+      .on(
+        'postgres_changes', // PostgreSQL 데이터 베이스의 변경사항을 알려주는 이벤트 명
+        {
+          event: '*', // 모든 이벤트 타입을 감지함 (insert, update, delete 등등등...)
+          schema: 'public', // 스키마가 public 인 것이 대상임
+          table: 'direct_chats', // 변경이 감시 되어질 테이블명
+        },
+        payload => {
+          // 변경 사항에 대한 상세 정보 (새로운 데이터, 이전 데이터 등등등...)
+          loadChats(); // 변경사항이 있을 때만 새로고침
+        },
+      )
+      .subscribe(); // 구독을 신청함. (addEventListener 처럼)
+
+    // 클린업 함수 : 컴포넌트가 언마운트 될 때 (화면에서 사라질 때) 실행
+    return () => {
+      // 구독 해제
+      subscription.unsubscribe(); // 반드시 해줌. 메모리 누수 방지, 백엔드 부하방지
+    };
+  }, [loadChats]);
 
   // 컴포넌트가 변경 시, 사용자 검색 즉시 실행
   // 검색어가 비어있지 않을 때만 검색 수행
@@ -77,7 +103,7 @@ const DrirectChatList = ({ onChatSelect, onCreateChat, selectedChatId }: DirectC
     // 상대방의 id 를 이용해서 채팅방을 생성해야 합니다.
     const chatId = await createDirectChat(user.id);
     if (chatId) {
-      onChatSelect(user.id); // 새로운 채팅방 생성
+      onChatSelect(chatId); // 생성된 채팅방 ID를 전달
       setShowUserSearch(false); // 사용자 검색 UI 숨기기
       setSearchTerm(''); // 검색어 초기화
     }
