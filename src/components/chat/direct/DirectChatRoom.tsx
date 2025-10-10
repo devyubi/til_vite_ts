@@ -311,5 +311,4 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
     </div>
   );
 };
-
 export default DirectChatRoom;
