@@ -844,7 +844,7 @@ export const useDirectChat = () => {
 ## 4. DirectChatList.tsx 업데이트
 
 - /src/components/chat/direct/DirectChatList.tsx 업데이트
-- Realtime 적용법 체크 해보기
+- Realtime 적용법 체크 해보기.
 
 ```tsx
 /**
