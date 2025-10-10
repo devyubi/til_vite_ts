@@ -6,14 +6,14 @@ import {
   useReducer,
   type PropsWithChildren,
 } from 'react';
-import type { Todo } from '../types/todoType';
+import type { Todo } from '../types/TodoTypes';
 import {
+  createTodo,
   getTodosInfinite,
-  updateTodo,
   toggleTodo as updatedServiceToggleTodo,
   deleteTodo as deletedServiceTodo,
-  createTodo,
-} from '../services/todoServices';
+  updateTodo,
+} from '../services/todoService';
 
 // 1. 초기값
 type InfiniteScrollState = {

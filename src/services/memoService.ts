@@ -1,7 +1,7 @@
 // 과제 제출용
 
 import { supabase } from '../lib/supabase';
-import type { Memo, MemoInsert, MemoUpdate } from '../types/todoType';
+import type { Memo, MemoInsert, MemoUpdate } from '../types/MemoType';
 
 // 메모 (todoType.ts)
 // export type Memo = Database['public']['Tables']['memos']['Row'];
