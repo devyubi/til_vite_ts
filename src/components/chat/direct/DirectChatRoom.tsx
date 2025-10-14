@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDirectChat } from '../../../contexts/DirectChatContext';
 import type { DirectMessage, MessageDetail } from '../../../types/ChatType';
-import MessageInput from '../chat/MessageInput';
+import MessageInput from '../common/MessageInput';
 import { supabase } from '../../../lib/supabase';
 
 // 날짜별 메시지 그룹 타입 정의  - 같은 날짜의 메시들을 그룹핑
@@ -17,36 +17,71 @@ interface DirectChatRoomProps {
 
 const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
   // DirectChatContext 에서 필요한 상태와 함수를 가져오기
-  const { messages, loading, error, loadMessages, currentChat, exitDirectChat } = useDirectChat();
+  const { messages, loading, error, loadMessages, currentChat, exitDirectChat, getUserProfile } =
+    useDirectChat();
 
   // 메시지가 개수가 많으면 하단으로 스크롤을 해야 함.
   // 새메시지가 추가될 때 마다 최신 메시지를 볼 수 있도록 해야 함.
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const previousMessageCount = useRef<number>(0);
+  const isInitialLoad = useRef<boolean>(true);
 
   // DOM 업데이트 후 실행되도록 함.
-  const scrollToBottom = () => {
+  const scrollToBottom = (force: boolean = false) => {
     // DOM 완료 후 실행되도록
-    setTimeout(() => {
-      messageEndRef.current?.scrollIntoView({
-        behavior: 'smooth', // 부드러운 스크롤 애니메이션
-        block: 'end', // 수직 스크롤을 요소의 하단에 맞춤
-        inline: 'nearest', // 수평 스크롤을 가장 가까운 위치에 맞춤
-      });
-    }, 100);
+    requestAnimationFrame(() => {
+      // chat-room-message 클래스를 가진 메시지 컨테이너 찾기
+      const messageContainer = document.querySelector('.chat-room-message');
+      if (messageContainer) {
+        // 메시지 컨테이너의 스크롤을 맨 아래로 설정
+        if (force) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        } else {
+          // 부드러운 스크롤
+          messageContainer.scrollTo({
+            top: messageContainer.scrollHeight,
+            behavior: 'smooth',
+          });
+        }
+      } else {
+        // fallback: 기존 방식 사용하되 block을 'nearest'로 변경
+        messageEndRef.current?.scrollIntoView({
+          behavior: force ? 'auto' : 'smooth',
+          block: 'nearest', // 가장 가까운 위치에 맞춤 (입력창이 보이도록)
+          inline: 'nearest',
+        });
+      }
+    });
   };
 
-  // 새로운 메세지가 추가되거나 메세지 목록이 변경이 되면 하단으로 스크롤
+  // 새로운 메시지가 추가될 때만 하단으로 스크롤
   useEffect(() => {
-    // 메세지가 왔을 때만 스크롤 실행
     if (messages.length > 0) {
-      scrollToBottom();
+      // 초기 로드 시에는 즉시 스크롤
+      if (isInitialLoad.current) {
+        scrollToBottom(true);
+        isInitialLoad.current = false;
+      }
+      // 메시지가 추가된 경우에만 부드럽게 스크롤
+      else if (messages.length > previousMessageCount.current) {
+        scrollToBottom(false);
+      }
+
+      previousMessageCount.current = messages.length;
     }
   }, [messages]);
 
-  // Supabase Realtime 으로 메세지 실시간 동기화
+  // 초기 로딩 완료 후 스크롤 (메세지 처음 로딩 완료)
+  useEffect(() => {
+    if (!loading && messages.length > 0 && isInitialLoad.current) {
+      scrollToBottom(true);
+      isInitialLoad.current = false;
+    }
+  }, [loading, messages]);
+
+  // Supabase Realtime 으로 메시지 실시간 동기화
   useEffect(() => {
     if (!chatId) return;
-
     const subscription = supabase
       .channel(`direct_messages_${chatId}`)
       .on(
@@ -55,7 +90,7 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
           event: '*',
           schema: 'public',
           table: 'direct_messages',
-          filter: `chat_id=eq.${chatId}`, // 들어가자마자 많은 채널이 연결되어버려서, 챗ID 쪽만 연결.
+          filter: `chat_id=eq.${chatId}`,
         },
         payload => {
           loadMessages(chatId); // 변경사항이 있을 때만 새로고침
@@ -67,13 +102,6 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
       subscription.unsubscribe();
     };
   }, [chatId, loadMessages]);
-
-  // 초기 로딩 완료 후 스크롤 (메세지 처음 로딩 완료)
-  useEffect(() => {
-    if (!loading && messages.length > 0) {
-      scrollToBottom();
-    }
-  }, [loading, messages]);
 
   // 채팅방 ID 가 변경이 되면 메시지를 다시 로드
   useEffect(() => {
@@ -124,7 +152,7 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
       // 해당 날짜의 그룹에 메시지 추가
       groups[date].push(message);
     });
-    return groups;
+    return groups; // 날짜별로 그룹화된 메시지 객체 반환
   };
 
   // 현재 사용자 ID (지금은 Mock 버전이어서 current 라고 함)
@@ -170,6 +198,29 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
       }
     }
   };
+
+  // 디버깅용 함수들 (필요시에만 활성화)
+  // const handleDebugProfile = async () => {
+  //   if (currentChat?.other_user?.id) {
+  //     console.log('=== 디버깅: 상대방 프로필 조회 시작 ===');
+  //     const profile = await getUserProfile(currentChat.other_user.id);
+  //     console.log('상대방 프로필 조회 결과:', profile);
+  //     console.log('=== 디버깅: 상대방 프로필 조회 완료 ===');
+  //   }
+  // };
+
+  // const handleDebugMyProfile = async () => {
+  //   console.log('=== 디버깅: 현재 사용자 프로필 조회 시작 ===');
+  //   const {
+  //     data: { user },
+  //   } = await supabase.auth.getUser();
+  //   if (user) {
+  //     const profile = await getUserProfile(user.id);
+  //     console.log('현재 사용자 프로필 조회 결과:', profile);
+  //     console.log('현재 사용자 user_metadata:', user.user_metadata);
+  //   }
+  //   console.log('=== 디버깅: 현재 사용자 프로필 조회 완료 ===');
+  // };
 
   //  에러 상태일 때 에러 메시지 표시
   if (error) {
@@ -234,6 +285,34 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
               <div className="message-group-container">
                 {dateMessages.map((message: DirectMessage) => {
                   const isMyMessage = message.sender_id === currentUserId;
+                  const isSystemMessage =
+                    message.is_system_message ||
+                    (message.content && message.content.includes('님이 채팅방을 나갔습니다'));
+
+                  // 모든 메시지에 대한 디버깅 로그
+                  console.log('메시지 렌더링:', {
+                    messageId: message.id,
+                    content: message.content,
+                    isSystemMessage: message.is_system_message,
+                    detectedSystemMessage: isSystemMessage,
+                    senderId: message.sender_id,
+                    currentUserId: currentUserId,
+                  });
+
+                  // 시스템 메시지인 경우 별도 처리
+                  if (isSystemMessage) {
+                    console.log('시스템 메시지 렌더링:', {
+                      messageId: message.id,
+                      content: message.content,
+                      isSystemMessage: message.is_system_message,
+                    });
+                    return (
+                      <div key={message.id} className="system-message">
+                        <div className="system-message-content">{message.content}</div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={message.id}
@@ -248,45 +327,116 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
                             <div className="message-time">{formatTime(message.created_at)}</div>
                           </div>
                           <div className="message-avatar">
-                            {message.sender?.avatar_url ? (
-                              <>
-                                {/* 나의 아바타 이미지가 있는 경우 */}
+                            {(() => {
+                              // 디버깅용 로그 (필요시에만 활성화)
+                              // console.log('나의 메시지 아바타 렌더링:', {
+                              //   sender: message.sender,
+                              //   avatar_url: message.sender?.avatar_url,
+                              //   nickname: message.sender?.nickname,
+                              //   sender_id: message.sender_id,
+                              //   isMyMessage: isMyMessage,
+                              // });
 
-                                <img
-                                  src={message.sender?.avatar_url}
-                                  alt={message.sender?.nickname}
-                                />
-                              </>
-                            ) : (
-                              <>
-                                {/* 나의 아바타 이미지가 없는 경우 - 첫글자만 */}
-                                <div className="avatar-placeholder">
-                                  {message.sender?.nickname.charAt(0)}
-                                </div>
-                              </>
-                            )}
+                              return message.sender?.avatar_url ? (
+                                <>
+                                  {/* 나의 아바타 이미지가 있는 경우 */}
+                                  <img
+                                    src={message.sender.avatar_url}
+                                    alt={message.sender.nickname}
+                                    onError={e => {
+                                      console.log(
+                                        '나의 아바타 이미지 로드 실패:',
+                                        message.sender.avatar_url,
+                                      );
+                                      console.log('나의 이미지 로드 실패 상세:', {
+                                        src: e.currentTarget.src,
+                                        naturalWidth: e.currentTarget.naturalWidth,
+                                        naturalHeight: e.currentTarget.naturalHeight,
+                                        complete: e.currentTarget.complete,
+                                      });
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove(
+                                        'hidden',
+                                      );
+                                    }}
+                                    onLoad={() => {
+                                      console.log(
+                                        '나의 아바타 이미지 로드 성공:',
+                                        message.sender.avatar_url,
+                                      );
+                                    }}
+                                  />
+                                  <div className="avatar-placeholder hidden">
+                                    {message.sender?.nickname.charAt(0)}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  {/* 나의 아바타 이미지가 없는 경우 - 첫글자만 */}
+                                  <div className="avatar-placeholder">
+                                    {message.sender?.nickname.charAt(0)}
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </>
                       ) : (
                         <>
                           {/* 대상의 메시지 - 왼쪽 정렬 */}
                           <div className="message-avatar">
-                            {message.sender?.avatar_url ? (
-                              <>
-                                {/* 대화상대 아바타 이미지가 있는 경우 */}
-                                <img
-                                  src={message.sender?.avatar_url}
-                                  alt={message.sender?.nickname}
-                                />
-                              </>
-                            ) : (
-                              <>
-                                {/* 대화상대 아바타 이미지가 없는 경우 - 첫글자만*/}
-                                <div className="avatar-placeholder">
-                                  {message.sender?.nickname.charAt(0)}
-                                </div>
-                              </>
-                            )}
+                            {(() => {
+                              // 디버깅용 로그 (필요시에만 활성화)
+                              // console.log('메시지 아바타 렌더링:', {
+                              //   sender: message.sender,
+                              //   avatar_url: message.sender?.avatar_url,
+                              //   nickname: message.sender?.nickname,
+                              //   sender_id: message.sender_id,
+                              //   isMyMessage: isMyMessage,
+                              // });
+
+                              return message.sender?.avatar_url ? (
+                                <>
+                                  {/* 대화상대 아바타 이미지가 있는 경우 */}
+                                  <img
+                                    src={message.sender.avatar_url}
+                                    alt={message.sender.nickname}
+                                    onError={e => {
+                                      console.log(
+                                        '아바타 이미지 로드 실패:',
+                                        message.sender.avatar_url,
+                                      );
+                                      console.log('이미지 로드 실패 상세:', {
+                                        src: e.currentTarget.src,
+                                        naturalWidth: e.currentTarget.naturalWidth,
+                                        naturalHeight: e.currentTarget.naturalHeight,
+                                        complete: e.currentTarget.complete,
+                                      });
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove(
+                                        'hidden',
+                                      );
+                                    }}
+                                    onLoad={() => {
+                                      console.log(
+                                        '아바타 이미지 로드 성공:',
+                                        message.sender.avatar_url,
+                                      );
+                                    }}
+                                  />
+                                  <div className="avatar-placeholder hidden">
+                                    {message.sender?.nickname.charAt(0)}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  {/* 대화상대 아바타 이미지가 없는 경우 - 첫글자만*/}
+                                  <div className="avatar-placeholder">
+                                    {message.sender?.nickname.charAt(0)}
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                           {/* 대화상대 메시지 :  말풍선, 시간, 아바타 (왼쪽 정렬) */}
                           <div className="message-bubble">
@@ -311,4 +461,5 @@ const DirectChatRoom = ({ chatId }: DirectChatRoomProps) => {
     </div>
   );
 };
+
 export default DirectChatRoom;

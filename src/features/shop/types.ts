@@ -6,7 +6,7 @@ export type GoodType = {
   name: string;
   price: number;
 };
-// ShopState 타입
+// Shop State 타입
 export type ShopStateType = {
   balance: number;
   cart: CartType[];
@@ -15,8 +15,8 @@ export type ShopStateType = {
 // Action 타입
 export enum ShopActionType {
   ADD_CART = 'ADD_CART',
-  REMOVE_CART_ONE = 'REMOVE_CART_ONE',
-  CLEAR_CART_ITEM = 'CLEAR_CART_ITEM',
+  REMOVE_CART_ONE = 'REMOVE_CART',
+  CLEAR_CART_ITEM = 'CLEAR_CART',
   BUY_ALL = 'BUY_ALL',
   RESET = 'RESET',
 }
@@ -32,9 +32,10 @@ export type ShopAction =
   | ShopActionAddCart
   | ShopActionRemoveCart
   | ShopActionClearCart
-  | ShopActionBuyAll
-  | ShopActionReset;
-// Context 의 Value 타입
+  | ShopActionReset
+  | ShopActionBuyAll;
+
+// Context의 Value 타입
 export type ShopValueType = {
   cart: CartType[];
   goods: GoodType[];
@@ -42,6 +43,6 @@ export type ShopValueType = {
   addCart: (id: number) => void;
   removeCartOne: (id: number) => void;
   clearCart: (id: number) => void;
-  resetCart: () => void;
   buyAll: () => void;
+  resetCart: () => void;
 };

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Todo, TodoInsert, TodoUpdate } from '../types/TodoTypes';
+import type { Todo, TodoInsert, TodoUpdate } from '../types/TodoType';
 
 // Todo 목록 조회
 export const getTodos = async (): Promise<Todo[]> => {
@@ -7,8 +7,8 @@ export const getTodos = async (): Promise<Todo[]> => {
     .from('todos')
     .select('*')
     .order('created_at', { ascending: false });
+  // 실행은 되었지만, 결과가 오류이다.
   if (error) {
-    // 실행은 되었지만 결과가 오류이다.
     throw new Error(`getTodos 오류 : ${error.message}`);
   }
   return data || [];
@@ -16,13 +16,13 @@ export const getTodos = async (): Promise<Todo[]> => {
 // Todo 목록 조회 (id) 를 이용함
 export const getTodoById = async (id: number): Promise<Todo | null> => {
   try {
-    const { data, error } = await supabase.from(`todos`).select(`*`).eq(`id`, id).single();
+    const { data, error } = await supabase.from('todos').select('*').eq('id', id).single();
     if (error) {
       throw new Error(`getTodoById 오류 : ${error.message}`);
     }
     return data;
   } catch (err) {
-    console.log(`getTodoById 에러 : ${err}`);
+    console.log('getTodoById 에러 : ', err);
     return null;
   }
 };
@@ -30,13 +30,14 @@ export const getTodoById = async (id: number): Promise<Todo | null> => {
 // Todo 생성
 // 로그인을 하고 나면 실제로 user_id 가 이미 파악이 됨
 // TodoInsert 에서 user_id : 값 을 생략하는 타입을 생성
-// 타입스크립트에서 Omit 을 이용하면, 특정 키를 제거할 수 있다.
+// 타입스크립트에서 Omit 을 이용하면, 특정 키를 제거할 수 있음.
 export const createTodo = async (newTodo: Omit<TodoInsert, 'user_id'>): Promise<Todo | null> => {
   try {
     // 현재 로그인 한 사용자 정보 가져오기
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     if (!user) {
       throw new Error('로그인이 필요합니다.');
     }
@@ -47,8 +48,7 @@ export const createTodo = async (newTodo: Omit<TodoInsert, 'user_id'>): Promise<
       .select()
       .single();
     if (error) {
-      // 실행은 되었지만 결과가 오류이다.
-      throw new Error(`createTodos 오류 : ${error.message}`);
+      throw new Error(`createTodo 오류 : ${error.message}`);
     }
     return data;
   } catch (error) {
@@ -140,44 +140,45 @@ export const updateTodo = async (
 };
 
 // Todo 삭제
-// content 에 포함된 파일을 제거하고 나서 내용을 삭제함
+// content 에 포함된 파일을 제거하고 나서 내용을 삭제함.
 export const deleteTodo = async (id: number): Promise<void> => {
   try {
-    // 1. 먼저 삭제할 todo의 content 에서 이미지의 url 만 추출함
+    // 1. 먼저 삭제할 todo의 content 에서 이미지의 url 만 추출한다.
     const { data: todo, error: fetchError } = await supabase
       .from('todos')
       .select('content, user_id')
       .eq('id', id)
       .single();
+
     if (fetchError) {
       throw new Error(`deleteTodo fetch 오류 : ${fetchError.message}`);
     }
     // 2. content 에서 이미지 URL을 추출
     if (todo.content) {
-      8;
-      // 정규 표현식으로 특정 패턴의 글자를 알아냄
+      // 정규 표현식으로 특정 패턴의 글자를 알아낸다.
       const imageUrlPattern = /https:\/\/[^"'\s]+\.(jpg|jpeg|png|gif|webp|svg)/gi;
       const imageUrls = todo.content.match(imageUrlPattern) || [];
       // 배열의 반복으로 요소를 찾아내는 법
-      // for, for in, for of 문중 가장 배열에 최적화 된 for 문은?
-      // (for 문은 배열 순회 가능, for in은 객체의 key(속성 이름) 을 순회하는 용도, for of 배열 요소(value) 자체를 순회. - 짧음.)
-
+      // imageUrls 에서 url 을 찾아서 파일 삭제 supabase 실행함.
       for (const url of imageUrls) {
         try {
           // url : https://erontyifxxztudowhees.supabase.co/storage/v1/object/public/todo-images/6b66829c-ec6c-4750-ad15-90641c3cb0fe/6b66829c-ec6c-4750-ad15-90641c3cb0fe_1758243951105_icon.png
           const urlParts = url.split('/');
           // urlParas : [ "https:",  "", "erontyifxxztudowhees.supabase.co"....]
-          // todo-images 라는 버킷이 몇번째 인지를 알아냄
-          // 버킷 다음이 실제 파일의 경로가 됨
+          // todo-images 라는 버킷이 몇번째 인지를 알아냄.
+          // 버킷 다음이 실제 파일의 경로가 됨.
           const bucketIndex = urlParts.findIndex((item: string) => item === 'todo-images');
-          // todo-images 의 Index를 찾았으므로 실제 파일 경로가 있는지 검사
-          // 만약 없다면 bucketIndex 가 -1 이라고 담겨짐
+
+          // todo-images 의 인덱스를 찾았으므로 실제 파일 경로가 있는지 검사
+          // 만약 없다면 bucketIndex 가  -1 이라고 담겨짐
           if (bucketIndex !== -1 && bucketIndex + 1 < urlParts.length) {
+            // 6b66829c-ec6c-4750-ad15-90641c3cb0fe/6b66829c-ec6c-4750-ad15-90641c3cb0fe_1758243951105_icon.png
             // 삭제 되어야 할 파일 경로 및 파일명
             const filePath = urlParts.slice(bucketIndex + 1).join('/');
             const { error: deleteError } = await supabase.storage
               .from('todo-images')
               .remove([filePath]);
+
             if (deleteError) {
               console.log(`이미지 파일 삭제 실패 : ${filePath}`, deleteError.message);
             }
@@ -190,13 +191,13 @@ export const deleteTodo = async (id: number): Promise<void> => {
 
     const { error } = await supabase.from('todos').delete().eq('id', id);
     if (error) {
-      // 실행은 되었지만 결과가 오류이다.
-      throw new Error(`deleteTodos 오류 : ${error.message}`);
+      throw new Error(`deleteTodo 오류 : ${error.message}`);
     }
   } catch (error) {
     console.log(error);
   }
 };
+
 // Completed Toggle
 export const toggleTodo = async (id: number, completed: boolean): Promise<Todo | null> => {
   return updateTodo(id, { completed });
@@ -225,8 +226,9 @@ export const getTodosPaginated = async (
   const { data } = await supabase
     .from('todos')
     .select('*')
-    .order(`created_at`, { ascending: false })
+    .order('created_at', { ascending: false })
     .range(from, to);
+
   // 편하게 활용
   const totalCount = count || 0;
   // 몇페이지 인지 계산 (소숫점은 올림)
@@ -249,6 +251,7 @@ export const getTodosInfinite = async (
     const { count, error: countError } = await supabase
       .from('todos')
       .select('*', { count: 'exact', head: true });
+
     if (countError) {
       throw new Error(`getTodosInfinite count 오류 : ${countError.message}`);
     }
@@ -259,6 +262,7 @@ export const getTodosInfinite = async (
       .select('*')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
     if (limitError) {
       throw new Error(`getTodosInfinite limit 오류 : ${limitError.message}`);
     }
@@ -269,7 +273,7 @@ export const getTodosInfinite = async (
     // 앞으로 더 가져올 것이 있는가?
     const hasMore = offset + limit < totalCount;
 
-    // 최종 값을 리턴함
+    // 최종 값을 리턴함.
     return {
       todos: data || [],
       hasMore,

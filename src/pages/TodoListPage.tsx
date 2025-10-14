@@ -5,15 +5,15 @@ import TodoWriteBox from '../components/todos/TodoWriteBox';
 import { useAuth } from '../contexts/AuthContext';
 import { TodoProvider, useTodos } from '../contexts/TodoContext';
 import { getProfile } from '../lib/profile';
-import type { Profile, Todo } from '../types/TodoTypes';
-// 컴포넌트 추후 추출
-interface TodoItemProps {
+import type { Profile, Todo } from '../types/TodoType';
+
+// 용서하세요. 나중에 추출하세요. ^^
+type TodoItemProps = {
   todo: Todo;
   index: number;
-}
-
+};
 const TodoItemBox = ({ todo, index }: TodoItemProps) => {
-  const { toggleTodo, deleteTodo, editTodo, currentPage, itemsPerPage, totalCount } = useTodos();
+  const { toggleTodo, editTodo, deleteTodo, currentPage, itemsPerPage, totalCount } = useTodos();
 
   // 순서번호 매기기
   const globalIndex = totalCount - ((currentPage - 1) * itemsPerPage + index);
@@ -43,18 +43,17 @@ const TodoItemBox = ({ todo, index }: TodoItemProps) => {
         >
           {todo.title}
         </Link>
-        <span className="todo-date">작성일 : {formatDate(todo.created_at)}</span>
+        <span className="todo-date">작성일: {formatDate(todo.created_at)}</span>
       </div>
     </li>
   );
 };
 
-// 컴포넌트 추후 추출
+// 용서하세요. 나중에 추출하세요. ^^
 const TodoListBox = () => {
   const { user } = useAuth();
-  // 전체 할 일 목록 가져오기
+  // 전체 할일 목록 가져오기
   const { todos } = useTodos();
-
   return (
     <ul className="todo-list">
       {todos.map((item, index) => (

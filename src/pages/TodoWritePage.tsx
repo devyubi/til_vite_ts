@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import type { Profile, TodoInsert } from '../types/TodoType';
 import { getProfile } from '../lib/profile';
 import { useNavigate } from 'react-router-dom';
 import { createTodo } from '../services/todoService';
 import RichTextEditor from '../components/RichTextEditor';
 import { supabase } from '../lib/supabase';
-import type { Profile, TodoInsert } from '../types/TodoTypes';
 
 function TodoWritePage() {
   const { user } = useAuth();
@@ -17,7 +17,7 @@ function TodoWritePage() {
   // 데이터가 추가 되고 있는지의 상태
   const [saving, setSaving] = useState(false);
 
-  // 이전에는 글자만 state로 관리했는데, 이제는 파일도 state로 관리해야 한다.
+  // 이전에는 글자만 state 로 관리했는데, 이제는 파일도 state로 관리해야 한다.
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   // 이미지 파일 변경 처리
   const handleImageChange = useCallback((images: File[]) => {
@@ -27,6 +27,9 @@ function TodoWritePage() {
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
   };
+  // const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  //   setContent(e.target.value);
+  // };
   const handleContentChange = (value: string) => {
     setContent(value);
   };
@@ -34,7 +37,7 @@ function TodoWritePage() {
   const handleCancel = () => {
     // 사용자가 실수로 취소를 할 수 있으므로 이에 대비
     if (title.trim() || content.trim()) {
-      if (window.confirm('작성중인 내용이 있습니다. 정말 취소하시겠습니까?')) {
+      if (window.confirm('작성 중인 내용이 있습니다. 정말 취소하시겠습니까?')) {
         // 목록으로
         navigate('/todos');
       }
@@ -44,10 +47,10 @@ function TodoWritePage() {
     }
   };
 
-  // 존과는 다르게
+  // 기존과는 다르게
   // 파일 저장 후 성공시
   // content 내용 중 img src="주소" 변경
-  // DB를 Insert 합니다.
+  // DB 를 Insert 합니다.
   const handleSave = async () => {
     // 제목은 필수 입력
     if (!title.trim()) {
@@ -57,12 +60,13 @@ function TodoWritePage() {
     try {
       setSaving(true);
       // 1. 기존의 content 내용을 보관한다.
-      let finalContent = content; // <img src="blob:~~" />
-      // 2. files이 존재한다면
+      let finalContent = content; // <img src="blob:~~`/>
+      // 2. files 이 존재한다면
       if (imageFiles.length > 0) {
         // 모든 blob: 글자를 찾습니다.
         const blobUrlPattern = /blob:[^"'\s]+/g;
         const blobUrls = finalContent.match(blobUrlPattern) || [];
+
         // 혹시라도 이미지 임시 개수와 보관하고 있는 파일개수가 다른 부분 고려
         for (let i = 0; i < blobUrls.length && i < imageFiles.length; i++) {
           const imageFile = imageFiles[i];
@@ -70,7 +74,8 @@ function TodoWritePage() {
           // 아래에서 업로드 합니다.
           try {
             // 파일명을 생성한다.
-            const timestamp = Date.now() + i; // 각 이미지마다 다른 시간글자
+            const timestamp = Date.now() + i; // 각 이미지 마다 다른 시간글자
+            // todo-images 저장소 폴더명생성 / 파일명 생성
 
             // 한글 파일명 또는 특수기호 처리
             const goodFileName = (filename: string) => {
@@ -105,25 +110,24 @@ function TodoWritePage() {
             };
 
             const safeFileName = goodFileName(imageFile.name);
-            // todo-images 저장소 폴더명 생성 / 파일명 생성
             const fileName = `${user!.id}_${timestamp}_${safeFileName}`;
-
             const filePath = `${user!.id}/${fileName}`;
-            // supabase에 실제로 업로드
+            // supabase 에 실제 업로드
             // 폴더가 있으면 재활용, 없으면 자동 생성
             const { error } = await supabase.storage
               .from('todo-images')
               .upload(filePath, imageFile, { cacheControl: '3600', upsert: false });
+
             if (error) {
               // 오류가 나도 계속 반복해라.
               continue;
             }
-            // 업로드 된 파일의 public URL을 가져와야 합니다.
+            // 업로드 된 파일의 public URL 을 가져와야 합니다.
             const { data: urlData } = await supabase.storage
               .from('todo-images')
               .getPublicUrl(filePath);
 
-            // blob주소의 문자열을 http로 변경함
+            // blob 주소의 문자열을 http 로 변경함
             finalContent = finalContent.replace(blobUrl, urlData.publicUrl);
           } catch (err) {
             console.log(err);
@@ -133,8 +137,9 @@ function TodoWritePage() {
 
       const newTodo: TodoInsert = { title, user_id: user!.id, content: finalContent };
       const result = await createTodo(newTodo);
+
       if (result) {
-        alert('할일이 성공적으로 등록되었습니다.');
+        alert('할 일이 성공적으로 등록되었습니다.');
         navigate('/todos');
       } else {
         alert('오류가 발생했습니다. 다시 시도해 주세요.');
@@ -158,10 +163,11 @@ function TodoWritePage() {
     };
     loadProfile();
   }, [user?.id]);
+
   return (
     <div>
       <div className="page-header">
-        <h2 className="page-title">✏️ 새 할일 작성</h2>
+        <h2 className="page-title">✏️ 새 할 일 작성</h2>
         {profile?.nickname && <p className="page-subtitle">{profile.nickname}님의 새로운 할 일</p>}
       </div>
       {/* 입력창 */}
@@ -173,7 +179,7 @@ function TodoWritePage() {
             className="form-input"
             value={title}
             onChange={e => handleTitleChange(e)}
-            placeholder="할일을 입력해 주세요"
+            placeholder="할 일을 입력해주세요."
             disabled={saving}
           />
         </div>
@@ -183,24 +189,24 @@ function TodoWritePage() {
             className="form-input"
             value={content}
             onChange={e => handleContentChange(e)}
-            placeholder="상세 내용을 입력해주세요 (선택사항)"
+            placeholder="상세 내용을 입력해주세요.(선택사항)"
             rows={6}
             disabled={saving}
           /> */}
           <RichTextEditor
             value={content}
             onChange={handleContentChange}
+            placeholder="상세 내용을 입력해주세요.(선택사항)"
             disabled={saving}
-            placeholder="상세 내용을 입력해 주세요"
             onImagesChange={handleImageChange}
           />
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? '⏳ 등록 중...' : '등록'}
-          </button>
           <button className="btn btn-secondary" onClick={handleCancel} disabled={saving}>
             취소
+          </button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? '⏳ 등록 중...' : '등록'}
           </button>
         </div>
       </div>

@@ -7,7 +7,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// auth 기능 추가하기 
+// auth 기능 추가하기
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // 웹브라우저에 탭이 열려 있는 동안 인증 토큰 자동 갱신

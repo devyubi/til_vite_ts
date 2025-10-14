@@ -30,7 +30,6 @@ const KakaoLoginButton = ({ onError, onSuccess }: KakaoLoginButtonProps) => {
       console.log('카카오 로그인 오류 : ', err);
     }
   };
-  
   return (
     <button
       type="button"

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
+import type { Profile, Todo } from '../types/TodoType';
 import { getProfile } from '../lib/profile';
 import { getTodoById, toggleTodo, updateTodo } from '../services/todoService';
 import Loading from '../components/Loading';
 import RichTextEditor from '../components/RichTextEditor';
 import { supabase } from '../lib/supabase';
-import type { Profile, Todo } from '../types/TodoTypes';
 
 function TodoEditPage() {
   const { user } = useAuth();
@@ -200,7 +200,7 @@ function TodoEditPage() {
         }
       }
 
-      // 현재 finalContent 는 많은 내용이 변경되었음 ( 기존 파일 삭제, 신규파일 추가 등 )
+      // 현재 finalContent 는 많은 내용이 변경되었음. (기존파일 삭제 또는 신규 파일 추가)
       const result = await updateTodo(todo.id, { title, content: finalContent });
       if (result) {
         alert('할 일이 성공적으로 수정되었습니다.');

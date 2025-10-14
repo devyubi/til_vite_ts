@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import type { ProfileInsert } from '../types/TodoType';
 import { createProfile } from '../lib/profile';
 import { useNavigate } from 'react-router-dom';
-import type { ProfileInsert } from '../types/TodoTypes';
 
 /**
  * - 인증 콜백 URL 처리
@@ -81,16 +81,6 @@ function AuthCallback() {
       const error = urlParams.get('error') || hashParams.get('error');
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
-
-      // console.log('OAuth 파라미터:', {
-      //   code: !!code,
-      //   error,
-      //   accessToken: !!accessToken,
-      //   refreshToken: !!refreshToken,
-      //   fullUrl: window.location.href,
-      //   search: window.location.search,
-      //   hash: window.location.hash,
-      // });
 
       if (error) {
         setMsg(`OAuth 오류: ${error}`);
@@ -171,16 +161,18 @@ function AuthCallback() {
       }
 
       // OAuth 로그인 이메일 중복 확인 (임시 비활성화)
-      if (isKakaoLogin && user.email) {
+      if (isOAuthLogin && user.email) {
         console.log(`${loginType} - 이메일 중복 확인 비활성화`);
         console.log(user.email);
       }
 
       // 닉네임 추출
       const nickname = extractNickname(user, isOAuthLogin, loginType);
+      console.log('추출된 닉네임:', nickname);
 
       // 프로필 존재 확인
       const existingProfile = await checkExistingProfile(user.id);
+      console.log('기존 프로필:', existingProfile);
 
       if (!existingProfile && nickname) {
         // 프로필 생성

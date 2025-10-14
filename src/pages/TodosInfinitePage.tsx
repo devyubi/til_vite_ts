@@ -4,8 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { InfiniteScrollProvider, useInfiniteScroll } from '../contexts/InfiniteScrollContext';
 import { getProfile } from '../lib/profile';
-import type { Profile } from '../types/TodoTypes';
-
+import type { Profile } from '../types/TodoType';
 // 용서하세요. 입력창 컴포넌트
 const InfiniteTodoWrite = () => {
   const navigate = useNavigate();

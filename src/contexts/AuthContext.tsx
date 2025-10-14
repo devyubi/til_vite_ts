@@ -9,7 +9,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import { supabase } from '../lib/supabase';
-import type { DeleteRequestInsert } from '../types/TodoTypes';
+import type { DeleteRequestInsert } from '../types/TodoType';
 
 // 1. 인증 컨텍스트 타입
 type AuthContextType = {
@@ -37,6 +37,7 @@ type AuthContextType = {
   changePassword: (
     newPassword: string,
   ) => Promise<{ error?: string; success?: boolean; message?: string }>;
+
   // 회원 로그아웃
   signOut: () => Promise<void>;
   // 회원정보 로딩 상태
@@ -233,7 +234,7 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
       if (!googleIdentity) {
         return { error: '구글 계정 연동 정보를 찾을 수 없습니다.' };
       }
-      // 사용자의 카카오 identity 찾기 성공
+      // 사용자의 구글 identity 찾기 성공
       const { error } = await supabase.auth.unlinkIdentity(googleIdentity);
       if (error) {
         console.log(' 구글 계정 연동 해제 실패:', error.message);
@@ -254,8 +255,8 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const changePassword: AuthContextType['changePassword'] = async (newPassword: string) => {
     try {
       // 이메일 로그인 사용자인지 확인
-      if (user?.app_metadata?.provider !== 'email') {
-        return { error: '이메일 로그인 사용자만 비밀번호를 변경 할 수 있습니다.' };
+      if (user?.app_metadata.provider && user.app_metadata.provider !== 'email') {
+        return { error: '이메일 로그인 사용자만 비밀번호를 변경할 수 있습니다.' };
       }
       // 비밀번호 길이 확인
       if (newPassword.length < 6) {
@@ -263,8 +264,9 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
       }
       // Supabase에서 비밀번호 업데이트
       const { error } = await supabase.auth.updateUser({ password: newPassword });
+
       if (error) {
-        console.log('비밀번호 변경 실패:', error.message);
+        console.log('비밀번호 변경 실패: ', error.message);
         return { error: '비밀번호 변경에 실패했습니다.' };
       }
       return {
@@ -285,7 +287,7 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   // 회원 탈퇴기능 (카카오, 구글 회원탈퇴 기능도 추가)
   const deleteAccount: AuthContextType['deleteAccount'] = async () => {
     try {
-      // 카카오 로그인 사용자 인지 확인
+      // 카카오, 구글 로그인 사용자 인지 확인
       const isKakaoUser = user?.app_metadata.provider === 'kakao';
       const isGoogleUser = user?.app_metadata.provider === 'google';
 
@@ -328,7 +330,7 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
         message: isKakaoUser
           ? '카카오 계정 연동이 해제되었습니다. 계정 삭제가 요청되었습니다.'
           : isGoogleUser
-            ? '구글 계정 연동이 해제되었습니다.'
+            ? '구글 계정 연동이 해제되었습니다. 계정 삭제가 요청되었습니다.'
             : '계정 삭제가 요청되었습니다. 관리자 승인 후 완전히 삭제됩니다.',
       };
     } catch (err) {

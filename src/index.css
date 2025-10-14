@@ -27,7 +27,7 @@ body {
 a {
   text-decoration: none;
   color: #3b82f6;
-  /* 중간단계에서 색상은 0.2초 동안 부드럽게 변함 */
+  /* 중간단계에서 color은 0.2초 동안 부드럽게 변함 */
   transition: color 0.2s ease;
 }
 
@@ -58,7 +58,7 @@ a.btn:focus {
 
 /* ===== List Styles ===== */
 /* 통상 ul 은 모양없이 진행함. */
-/* ol 은 Order List 로서 순서가 있는 목록 */
+/* ol 은 order List 로서 순서가 있는 목록 */
 ul,
 li {
   list-style: none;
@@ -67,7 +67,7 @@ li {
 /* ===== Button Base Styles ===== */
 button {
   font-family: inherit;
-  /* 버튼은 모통 마우스 커서를 pointer 설정 */
+  /* 버튼은 보통 마우스 커서를 pointer 설정 */
   cursor: pointer;
   border: none;
   border-radius: 8px;
@@ -89,7 +89,7 @@ textarea {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   padding: 8px 12px;
-  /* 중간모션 설정에서 조금씩 적용이 다를때 */
+  /* 중간모션 설정에서 여러개를 조금씩 적용이 다를때 */
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -132,11 +132,11 @@ textarea:focus {
   --gray-900: #111827;
 
   /* Spacing */
-  /* rem 은 html 의 폰트사이즈를 기준으로 배수로 계산 */
+  /* rem 은 html의  폰트사이즈를 기준으로 배수로 계산 */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
-  /* 1rem 이 현재는 16px */
+  /* 1rem 이 현재는 16px  */
   --space-4: 1rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
@@ -353,7 +353,7 @@ textarea:focus {
 }
 
 .todo-title.completed {
-  /* 라인 취소선 */
+  /* 중간 취소선 */
   text-decoration: line-through;
   color: var(--gray-500);
 }
@@ -373,7 +373,7 @@ textarea:focus {
 .nav {
   display: flex;
   gap: var(--space-6);
-  /* 영역의 오른쪽 끝으로 정렬할 때 */
+  /* 영역에 오른쪽 끝으로 정렬할 때 */
   justify-content: flex-end;
   padding: var(--space-6) var(--space-8);
   background: white;
@@ -402,6 +402,28 @@ textarea:focus {
   outline-offset: 2px;
 }
 
+/* 알림 배지 스타일 */
+.notification-badge {
+  position: relative;
+  display: inline-block;
+  margin-left: 6px;
+  color: #ff4444;
+  font-size: 12px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 /* ===== Loading States ===== */
 .loading-container {
   display: flex;
@@ -422,6 +444,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 흐림효과 */
   backdrop-filter: blur(2px);
 }
 
@@ -462,7 +485,7 @@ textarea:focus {
   border: 1px solid var(--primary-300);
   border-top: 1px solid var(--primary-600);
   border-radius: 50%;
-  /* animation : 모션이름 모션시간 시간왜곡 무한루프 모션반대로진행 */
+  /* animation : 모션이름 모션시간 시간왜곡 무한루프 모션반대로진행*/
   animation: spin 0.5s linear infinite reverse;
 }
 
@@ -843,83 +866,73 @@ textarea:focus {
   outline: none !important;
 }
 
-/* ====== PageNation Styles ===== */
+/* ===== PageNation Styles ===== */
 .pagination-container {
   display: 'flex';
   align-items: 'center';
   gap: var(--space-4);
   padding: var(--space-4);
 }
-
 .pagination-info {
   text-align: center;
   color: var(--gray-600);
   font-size: 14px;
 }
-
 .pagination-count {
   font-weight: 600;
   color: var(--gray-600);
 }
-
 .pagination-range {
   font-weight: 600;
-  color: var(--gray-600);
+  color: var(--gray-800);
 }
-
 .pagination-controls {
   display: flex;
-  align-items: center;
+  align-self: center;
   justify-content: center;
   gap: var(--space-2);
 }
-
 .pagination-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--space-3);
-  min-height: 40px;
+  min-width: 40px;
   height: 40px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--gray-300);
-  background-color: var(--gray-50);
+  background-color: #fff;
   color: var(--gray-700);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
 }
-
 .pagination-btn:hover {
   background-color: var(--primary-50);
   border-color: var(--primary-300);
   color: var(--primary-700);
   box-shadow: var(--shadow-sm);
 }
-
 .pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background-color: var(--gray-100);
   color: var(--gray-400);
 }
-
 .pagination-numbers {
   display: flex;
   gap: var(--space-1);
 }
-
 .pagination-ellipsis {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 40px;
   height: 40px;
-  color: var(--gray-400);
-  font-size: 16px;
+  color: var(--gray-500);
   font-weight: 600;
+  font-size: 16px;
 }
-
-/* 현재 페이지 일 때 버튼 */
+/* 현재 페이지일 때 버튼 */
 .pagination-btn-number.active {
   background-color: var(--primary-500);
   border-color: var(--primary-500);
@@ -927,12 +940,10 @@ textarea:focus {
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
-
 .pagination-btn-number.active:hover {
   background-color: var(--primary-600);
   border-color: var(--primary-600);
 }
-
 /* 반응형 */
 @media screen and (max-width: 768px) {
   .pagination-controls {

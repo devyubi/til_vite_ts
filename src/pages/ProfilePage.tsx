@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getProfile, removeAvatar, updateProfile, uploadAvatar } from '../lib/profile';
-import type { Profile, ProfileUpdate } from '../types/TodoTypes';
+import type { Profile, ProfileUpdate } from '../types/TodoType';
 import Loading from '../components/Loading';
 
 /**
@@ -131,10 +131,10 @@ function ProfilePage() {
     }
   };
 
-  // 카카오 계정 연동 해제 (회원 탈퇴)
+  // 카카오 계정 연동 해제
   const handleUnlinkKakao = async () => {
     const message =
-      '카카오 계정 연동을 해제 하시겠습니까? \n\n 연동 해제 후 카카오로 다시 로그인이 불가능 합니다.';
+      '카카오 계정 연동을 해제하시겠습니까? \n\n 연동 해제 후에는 카카오로 다시 로그인 할 수 없습니다.';
     const isConfirm = confirm(message);
 
     if (isConfirm) {
@@ -149,10 +149,10 @@ function ProfilePage() {
     }
   };
 
-  // 구글 계정 연동 해제 (회원 탈퇴)
+  // 구글 계정 연동 해제
   const handleUnlinkGoogle = async () => {
     const message =
-      '구글 계정 연동을 해제 하시겠습니까? \n\n 연동 해제 후 구글로 다시 로그인이 불가능 합니다.';
+      '구글 계정 연동을 해제하시겠습니까? \n\n 연동 해제 후에는 구글로 다시 로그인 할 수 없습니다.';
     const isConfirm = confirm(message);
 
     if (isConfirm) {
@@ -171,7 +171,7 @@ function ProfilePage() {
   const handlePasswordChange = async () => {
     // 입력값 검증
     if (!newPassword.trim()) {
-      setPasswordMessage('새로운 비밀번호를 입력해주세요.');
+      setPasswordMessage('새 비밀번호를 입력해주세요.');
       return;
     }
     if (newPassword.length < 6) {
@@ -189,12 +189,12 @@ function ProfilePage() {
         // 폼 초기화
         setNewPassword('');
         setConfirmPassword('');
-        // 3초 후 메세지 자동으로 제거
+        // 3초 후 메시지 자동 제거
         setTimeout(() => {
           setPasswordMessage('');
         }, 3000);
       } else if (result.error) {
-        setPasswordMessage(`비밀번호 변경 실패 : ${result.error}`);
+        setPasswordMessage(`비밀번호 변경 실패: ${result.error}`);
       }
     } catch (err) {
       setPasswordMessage('비밀번호 변경 중 오류가 발생했습니다.');
@@ -306,14 +306,13 @@ function ProfilePage() {
       {/* 사용자 기본 정보 섹션 */}
       <div className="card">
         <h3 style={{ marginBottom: 'var(--space-4)', color: 'var(--gray--800)' }}>📧 기본 정보</h3>
-
         {/* 로그인 방식 표시 */}
         <div className="form-group">
           <label className="form-label">로그인 방식</label>
           <div
             style={{
               padding: 'var(--space-3)',
-              backgroundColor: '#fff',
+              backgroundColor: '#ffffff',
               borderRadius: 'var(--radius-md)',
               color: 'var(--gray-700)',
               display: 'flex',
@@ -425,7 +424,6 @@ function ProfilePage() {
                 placeholder="닉네임을 입력하세요."
               />
             </div>
-
             {/* 이메일 로그인 사용자에게만 비밀번호 변경 섹션 표시 */}
             {(!user?.app_metadata.provider || user?.app_metadata.provider === 'email') && (
               <div className="form-group">
@@ -455,7 +453,7 @@ function ProfilePage() {
                     변경
                   </button>
                 </div>
-                {/* 비밀번호 변경 메세지 */}
+                {/* 비밀번호 변경 메시지 */}
                 {passwordMessage && (
                   <div
                     style={{
@@ -475,7 +473,6 @@ function ProfilePage() {
                 )}
               </div>
             )}
-
             <div className="form-group">
               <label className="form-label">아바타 편집</label>
               <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -693,6 +690,7 @@ function ProfilePage() {
                 {profileData?.nickname || '닉네임이 설정되지 않았습니다'}
               </div>
             </div>
+
             <div className="form-group">
               <label className="form-label">🖼️ 아바타</label>
               <div style={{ textAlign: 'center' }}>
@@ -811,7 +809,7 @@ function ProfilePage() {
               <button
                 className="btn btn-warning btn-lg"
                 onClick={handleUnlinkGoogle}
-                style={{ backgroundColor: '#003180', color: '#FFFFFF', border: 'none' }}
+                style={{ backgroundColor: '#4285F4', color: '#FFFFFF', border: 'none' }}
               >
                 🔗 구글 연동 해제
               </button>

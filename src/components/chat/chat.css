@@ -4,6 +4,29 @@
   display: flex;
   flex-direction: column;
 }
+
+/* 숨김 클래스 */
+.hidden {
+  display: none !important;
+}
+
+/* 시스템 메시지 스타일 */
+.system-message {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.system-message-content {
+  background-color: #f0f0f0;
+  color: #666;
+  padding: 8px 16px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-style: italic;
+  max-width: 80%;
+  text-align: center;
+}
 /* 메인 채팅 컨테이너 - 사이드바와 채팅방을 나누는 레이아웃 */
 .chat-container {
   display: flex;
@@ -430,6 +453,13 @@
   z-index: 2;
 }
 
+/* 메시지들 묶음 컨테이너 */
+.message-group-container {
+  position: relative;
+  width: 100%;
+  padding: 0 20px;
+}
+
 /* ==== 개별 메시지 스타일 ==== */
 
 /* 메시지 아이템 기본 레이아웃 */
@@ -446,6 +476,12 @@
   flex-direction: column;
   max-width: 100%;
 }
+
+/* 메시지 호버시 시간 표시 - 불투명하게 */
+.message-bubble:hover .message-time {
+  opacity: 1;
+}
+
 /* 메시지 텍스트 - 말풍선 스타일 */
 .message-text {
   padding: 8px 12px;
@@ -527,20 +563,17 @@
   color: #ffffff;
 }
 
-/* 메세지들 묶음 컨테이너 */
-.message-group-container {
-  position: relative;
-  width: 100%;
-  padding: 0 20px;
-}
+/* ==== 메시지 입력 영역 ==== */
 
-/* ==== 메세지 입력 영역 ==== */
-
-/* 메세지 입력 컨테이너 - 하단고정 */
+/* 메시지 입력 컨테이너 - 하단 고정 */
 .message-input {
   border-top: 1px solid #e0e0e0;
-  background-color: #fff;
+  background-color: #ffffff;
   padding: 16px;
+}
+/* 메시지 입력 폼 */
+.message-form {
+  width: 100%;
 }
 
 /* 입력 컨테이너 - 텍스트, 전송 버튼 */
@@ -549,47 +582,46 @@
   gap: 8px;
 }
 
-/* 메세지 입력 텍스트 영역 - 자동 높이 조절 */
+/* 메시지 입력 텍스트 영역 - 자동 높이 조절 */
 .message-textarea {
   flex: 1;
   min-height: 40px;
   max-height: 120px;
   border: 1px solid #ddd;
   border-radius: 20px;
+  /* 너비, 높이 제어함 */
   resize: none;
   font-size: 14px;
   line-height: 1.4;
 }
 
-/* 텍스트 영역 포커스 시 파란색 테두리 */
+/*  텍스트 영역 포커스 시 파란색 테두리 */
 .message-textarea:focus {
   outline: none;
   border-color: #007bff;
 }
 
-/* 전송 버튼 - 원형 */
+/* 전송 버튼 - 원형 버튼 */
 .send-button {
   width: 40px;
   height: 40px;
   border: none;
   border-radius: 50%;
   background-color: #007bff;
-  color: #fff;
+  color: #ffffff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
 }
-
 /* 전송 버튼 호버 효과 - 비활성화 아니라면 */
 .send-button:hover:not(:disabled) {
   background-color: #0056b3;
 }
-
 /* 전송 버튼 비활성화 상태 */
 .send-button:disabled {
-  background-color: #ccc;
+  background-color: #cccccc;
   cursor: not-allowed;
 }
 
@@ -597,19 +629,12 @@
 .loading-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #fff;
+  border: 2px solid #ffffff;
   border-top: 2px solid transparent;
   border-radius: 50%;
 
-  /* animation-name: spin;
-  animation-duration: 1s;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  animation-delay: 0s; */
-
-  animation: spin 1s linear infinite 0s;
+  animation: spin 1s linear infinite;
 }
-
 /* 스피너 회전 애니메이션 */
 @keyframes spin {
   0% {

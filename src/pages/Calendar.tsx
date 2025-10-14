@@ -34,15 +34,15 @@ function Calendar() {
       title: '과학 실험',
       start: '2025-09-05T10:00:00',
       end: '2025-09-05T11:00:00',
-      classNames: ['science-event'],
+      className: ['science-event'],
     },
   ]);
   // 일정 상세 보기
   const handleClick = (info: EventClickArg) => {
     // console.log(info.event.title);
     // alert(`제목 : ${info.event.title} 입니다.`);
-    // 삭제 한다면? (useState 업데이트하면 됨)
-    const arr = events.filter(item => item.id !== info.event.id);
+    // 삭제한다면? (useState 업데이트하면 됨)
+    const arr = events.filter(item => item.title !== info.event.title);
     setEvents(arr);
   };
   // 빈 날짜 선택 처리
@@ -84,7 +84,7 @@ function Calendar() {
         {/* listPlugin :  목록 출력 관련 플러그인 */}
         <FullCalendar
           plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin, listPlugin]}
-          initialView="timeGridWeek"
+          initialView="dayGridMonth"
           events={events} // 일정 출력
           headerToolbar={headerToolbar}
           locale={koLocale} // 한국어
@@ -99,15 +99,16 @@ function Calendar() {
           select={e => handleSelect(e)}
           editable={true} // 드래그로 수정
           height={'auto'}
-          eventColor="#90ee90" // 기본 이벤트 배경색
-          eventTextColor="#000" // 기본 이벤트 글자색
-          eventBorderColor="#008000" // 기본 이벤트 테두리색상
+          eventColor="#90ee90" // 기본 이벤트 배경색상
+          eventTextColor="#000" // 기본 글자색상
+          eventBorderColor="#008000" // 기본 테두리색상
           // JSX 출력하기
           eventContent={e => {
             return (
               <>
-                <div style={{ backgroundColor: 'yellowgreen', padding: '20px' }}></div>
-                <b>{e.event.title}</b>
+                <div style={{ backgroundColor: 'yellowgreen', padding: '20px' }}>
+                  <b>😍 {e.event.title}</b>
+                </div>
               </>
             );
           }}

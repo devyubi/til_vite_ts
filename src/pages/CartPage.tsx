@@ -4,9 +4,9 @@ import Cart from '../components/shop/Cart';
 function CartPage() {
   const box: React.CSSProperties = {
     padding: 16,
-    border: '1px solid #000',
+    border: '1px solid #e5e7eb',
     borderRadius: 12,
-    background: 'fafafa',
+    background: '#fafafa',
     marginTop: 12,
     textAlign: 'center',
   };
