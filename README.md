@@ -1,655 +1,86 @@
-# Redux
+# JWT
 
-- https://redux-toolkit.js.org/
-- https://ko.redux.js.org
-- Context API 와 같은 역할을 함.
-- 여러 컴포넌트들이 값(state)를 공유해서 활용한다.
-- `Redux` 와 `Redux Toolkit` 이 있다.
-- Redux 가 복잡해서 나온 최신 버전이 `Redux Toolkit`
+## 1. 개념
 
-## 1. 설치
+- JavaScript Web Token
+- String 이고, 모양이 json 형태 (JavaScript Object Notation)
+- `{키명:키값...}`
+- `디지털 입장권`처럼 자료 요청, 자료등록등에 서버에 작업시 요청할 때 활용
 
-- https://redux-toolkit.js.org/introduction/getting-started
+## 2. Token 의 종류
 
-```bash
-npm install @reduxjs/toolkit
-```
+### 2.1. Access Token
 
-```bash
-npm install react-redux
-```
+- 서버에 자료 요청 및 자료 등록 시 활용 되는 토큰(글자)
+- 유효 기간이 존재함 (30분)
 
-## 2. Props 예제
+### 2.2. Refresh Token
 
-- `State Props Drilling` 을 개발자가 관리해야 함.
-- `Drilling` 은 `3 단계 이상 넘어가면 관리`가 어렵습니다.
-- App.tsx 대상 코드 진행중
+- 유효기간 만료시에 Access Token 을 재요청하기 위한 토큰
 
-```tsx
-import { useState } from 'react';
-// css 객체
-const container_root: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  border: '5px solid black',
-  padding: 10,
-  gap: 10,
-};
-const container: React.CSSProperties = {
-  border: '5px solid red',
-  display: 'flex',
-  gap: '10px',
-};
-const container_title: React.CSSProperties = {
-  fontSize: '40px',
-  color: 'blue',
-  border: '5px solid orange',
-};
-const container_div: React.CSSProperties = {
-  border: '5px solid hotpink',
-  margin: 10,
-};
-const container_div_2: React.CSSProperties = {
-  border: '5px solid yellowgreen',
-  margin: 10,
-};
-const btn: React.CSSProperties = {
-  border: '5px solid #000',
-  padding: 10,
-  margin: 20,
-};
-export default function App() {
-  // 만약 props 로 useState 값을 넘겨준다면?
-  const [num, setNum] = useState(0);
-  const onIncrease = () => {
-    setNum(num + 1);
-  };
+### 2.3. Token 의 흐름
 
-  return (
-    <div style={container_root}>
-      <div style={container_title}>Root : {num} </div>
+- Access Token → 유효기간 만료시 → Refresh Token → Access Token 재발급
 
-      <div style={container}>
-        <div>
-          <Left_1 num={num} />
-        </div>
-        <div>
-          <Right_1 action={onIncrease} />
-        </div>
-      </div>
-    </div>
-  );
-}
-// 각각이 컴포넌트로 되어 있음.
-function Left_1(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_1 : {props.num}</h1>
-      <div>
-        <Left_2 num={props.num} />
-      </div>
-    </div>
-  );
-}
+## 3. 발급 받은 Token 보관 장소
 
-function Left_2(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_2 : {props.num}</h1>
-      <div>
-        <Left_3 num={props.num} />
-      </div>
-    </div>
-  );
-}
+- 웹브라우저 : Cookie
+- 웹브라우저 : LocalStorage
+- Redux 에서는 redux-persist 라이브러리로 LocalStorage 에 보관
 
-function Left_3(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_3 : {props.num}</h1>
-      <div>
-        <Left_4 num={props.num} />
-      </div>
-    </div>
-  );
-}
+## 4. 토큰 사용법
 
-function Left_4(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_4 : {props.num}</h1>
-    </div>
-  );
-}
+### 4.1. 일반적으로 axios 를 활용함
 
-// 각각이 컴포넌트로 되어 있음.
-function Right_1(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_2 action={props.action} />
-      </div>
-    </div>
-  );
-}
+### 4.2. 일반적으로 axios 의 intercepter 를 활용함
 
-function Right_2(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_3 action={props.action} />
-      </div>
-    </div>
-  );
-}
+- 자동으로 Access 또는 Refresh 토큰들을 포함해서 요청, 등록을 진행함
 
-function Right_3(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_4 action={props.action} />
-      </div>
-    </div>
-  );
-}
+### 4.3. Access Token 활용 예시
 
-function Right_4(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <button onClick={() => props.action()} style={btn}>
-          값의 증가 버튼
-        </button>
-      </div>
-    </div>
-  );
-}
-```
+```ts
+// api.js
+import axios from 'axios';
 
-## 3. Redux 예제로 변경
+const api = axios.create({
+  baseURL: 'https://example.com/api',
+});
 
-### 3.1. 기본적 흐름
+// 요청 인터셉터
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('accessToken');
 
-```tsx
-import { createStore } from '@reduxjs/toolkit';
-import { useState } from 'react';
-import {} from 'react-redux';
-
-// 3. reducer 함수를 만든다.
-function reducer(state, action) {
-  if(action.type ==== "") {
-    return {...state, num: state.value + 1}
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  return state
-}
 
-// 2. 초기값을 생성한다.
-const initialState = {
-  num: 0,
-};
-
-// 1. store 를 생성한다.
-const store = createStore(reducer, initialState);
-
-export default function App() {
-  // 만약 props 로 useState 값을 넘겨준다면?
-  const [num, setNum] = useState(0);
-  const onIncrease = () => {
-    setNum(num + 1);
-  };
-
-  return (
-    <div style={container_root}>
-      <div style={container_title}>Root : {num} </div>
-
-      <div style={container}>
-        <div>
-          <Left_1 num={num} />
-        </div>
-        <div>
-          <Right_1 action={onIncrease} />
-        </div>
-      </div>
-    </div>
-  );
-}
-// 각각이 컴포넌트로 되어 있음.
-function Left_1(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_1 : {props.num}</h1>
-      <div>
-        <Left_2 num={props.num} />
-      </div>
-    </div>
-  );
-}
-
-function Left_2(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_2 : {props.num}</h1>
-      <div>
-        <Left_3 num={props.num} />
-      </div>
-    </div>
-  );
-}
-
-function Left_3(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_3 : {props.num}</h1>
-      <div>
-        <Left_4 num={props.num} />
-      </div>
-    </div>
-  );
-}
-
-function Left_4(props: { num: number }) {
-  return (
-    <div style={container_div}>
-      <h1>Left_4 : {props.num}</h1>
-    </div>
-  );
-}
-
-// 각각이 컴포넌트로 되어 있음.
-function Right_1(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_2 action={props.action} />
-      </div>
-    </div>
-  );
-}
-
-function Right_2(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_3 action={props.action} />
-      </div>
-    </div>
-  );
-}
-
-function Right_3(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_4 action={props.action} />
-      </div>
-    </div>
-  );
-}
-
-function Right_4(props: { action: () => void }) {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <button onClick={() => props.action()} style={btn}>
-          값의 증가 버튼
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// css 객체
-const container_root: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  border: '5px solid black',
-  padding: 10,
-  gap: 10,
-};
-const container: React.CSSProperties = {
-  border: '5px solid red',
-  display: 'flex',
-  gap: '10px',
-};
-const container_title: React.CSSProperties = {
-  fontSize: '40px',
-  color: 'blue',
-  border: '5px solid orange',
-};
-const container_div: React.CSSProperties = {
-  border: '5px solid hotpink',
-  margin: 10,
-};
-const container_div_2: React.CSSProperties = {
-  border: '5px solid yellowgreen',
-  margin: 10,
-};
-const btn: React.CSSProperties = {
-  border: '5px solid #000',
-  padding: 10,
-  margin: 20,
-};
-```
-
-### 3.2. 기본 구성 진행
-
-- 단계 1 : `/src/redux 폴더` 만들기
-- 단계 1 : `/src/redux/store.ts 파일` 만들기
-
-```ts
-import { configureStore } from '@reduxjs/toolkit';
-
-// Redux 는 Store 를 조각조각 내서 사용한다.
-// Store 를 조각내서 활용하는 것을 Slice 라고 한다.
-import numReducer from './slices/numSlice';
-
-export const store = configureStore({
-  reducer: { num: numReducer },
+  return config;
 });
 
-// 값을 읽을 때의 타입
-export type RootState = ReturnType<typeof store.getState>;
-// 값을 갱신 할 때의 타입
-export type AppDispatch = typeof store.dispatch;
+export default api;
 ```
 
-- 단계 2 : `/src/redux/slices 폴더` 만들기
-- 단계 2 : `/src/redux/slices/numSlice.ts 파일` 만들기
+### 4.4. Refresh Token 활용하기
 
 ```ts
-import { createSlice } from '@reduxjs/toolkit';
+api.interceptors.response.use(
+  res => res,
+  async error => {
+    if (error.response.status === 401) {
+      const refresh = localStorage.getItem('refreshToken');
 
-// Slice 의 초기값
-const initialState = {
-  num: 0,
-};
+      // 새 토큰 요청
+      const res = await axios.post('/auth/refresh', { refresh });
 
-// Slice 구성
-const numSlice = createSlice({
-  name: 'numSlice',
-  initialState,
-  reducers: {
-    onIncrease: state => {
-      state.num += 1;
-    },
+      localStorage.setItem('accessToken', res.data.newAccessToken);
+
+      // 원래 요청 다시 보내기
+      error.config.headers.Authorization = `Bearer ${res.data.newAccessToken}`;
+      return api(error.config);
+    }
+
+    return Promise.reject(error);
   },
-});
-
-// 액션 내보내기
-export const { onIncrease } = numSlice.actions;
-
-// 보통 Slice 는 default 로 내보냄
-export default numSlice.reducer;
-```
-
-### 3.3. Redux Provider 적용
-
-- Provider 공급 (`/main.tsx`)
-
-```tsx
-import { createRoot } from 'react-dom/client';
-
-import './index.css';
-import App from './App';
-import { Provider } from 'react-redux';
-import { store } from './redux/store';
-
-createRoot(document.getElementById('root')!).render(
-  <Provider store={store}>
-    <App />
-  </Provider>,
 );
 ```
 
-- store 의 `slice 의 state` 와 `slice 의 action` 활용해보기
-
-```tsx
-function Left_4() {
-  // state 값 읽기
-  const num = useSelector((state: RootState) => state.num.num);
-
-  return (
-    <div style={container_div}>
-      <h1>Left_4 : {num} </h1>
-    </div>
-  );
-}
-```
-
-```tsx
-function Right_4() {
-  const dispatch = useDispatch();
-
-  return (
-    <div style={container_div_2}>
-      <div>
-        <button onClick={() => dispatch(onIncrease())} style={btn}>
-          값의 증가 버튼
-        </button>
-      </div>
-    </div>
-  );
-}
-```
-
-## 4. 예제 2 (좋아요)
-
-### 4.1. Slice 만들기
-
-- `/src/redux/slices/likeSlice.ts 파일` 생성
-
-```ts
-import { createSlice } from '@reduxjs/toolkit';
-
-const initialState = {
-  count: 0,
-};
-
-const likeSlice = createSlice({
-  name: 'likeSlice',
-  initialState,
-  reducers: {
-    addLike: state => {
-      state.count += 1;
-    },
-    removeLike: state => {
-      state.count -= 1;
-    },
-  },
-});
-
-export const { addLike, removeLike } = likeSlice.actions;
-
-export default likeSlice.reducer;
-```
-
-### 4.2. Store 등록하기
-
-- `/src/redux/slice/store.ts` 업데이트 (추가)
-
-```ts
-import { configureStore } from '@reduxjs/toolkit';
-
-// Redux 는 Store 를 조각조각 내서 사용함
-// Store 를 조각내서 활용하는 것을 Slice 라고 함
-import numReducer from './slices/numSlice';
-import likeReducer from './slices/likeSlice';
-
-export const store = configureStore({
-  reducer: { num: numReducer, like: likeReducer },
-});
-
-// 값을 읽을 때의 타입
-export type RootState = ReturnType<typeof store.getState>;
-
-// 값을 갱신 할 때의 타입
-export type AppDispatch = typeof store.dispatch;
-```
-
-### 4.3. `Provider 작성되었는지 확인`하기
-
-- `/main.tsx`
-
-### 4.4. 활용하기
-
-```tsx
-import { Provider, useDispatch, useSelector } from 'react-redux';
-import { store, type RootState } from './redux/store';
-import { onIncrease } from './redux/slices/numSlice';
-import { addLike, removeLike } from './redux/slices/likeSlice';
-
-export default function App() {
-  // state 값 읽기
-  const num = useSelector((state: RootState) => state.num.num);
-
-  // state 값 변경
-  const dispatch = useDispatch();
-
-  return (
-    <div style={container_root}>
-      <div style={container_title}>Root : {num} </div>
-
-      <div style={container}>
-        <div>
-          <Left_1 />
-        </div>
-        <div>
-          <Right_1 />
-        </div>
-      </div>
-    </div>
-  );
-}
-// 각각이 컴포넌트로 되어 있음.
-function Left_1() {
-  return (
-    <div style={container_div}>
-      <h1>Left_1 : </h1>
-      <div>
-        <Left_2 />
-      </div>
-    </div>
-  );
-}
-
-function Left_2() {
-  const like = useSelector((state: RootState) => state.like.count);
-
-  return (
-    <div style={container_div}>
-      <h1>Left_2 좋아요 : {like}</h1>
-      <div>
-        <Left_3 />
-      </div>
-    </div>
-  );
-}
-
-function Left_3() {
-  return (
-    <div style={container_div}>
-      <h1>Left_3 : </h1>
-      <div>
-        <Left_4 />
-      </div>
-    </div>
-  );
-}
-
-function Left_4() {
-  // state 값 읽기
-  const num = useSelector((state: RootState) => state.num.num);
-
-  return (
-    <div style={container_div}>
-      <h1>Left_4 : {num} </h1>
-    </div>
-  );
-}
-
-// 각각이 컴포넌트로 되어 있음.
-function Right_1() {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_2 />
-      </div>
-    </div>
-  );
-}
-
-function Right_2() {
-  const dispatch = useDispatch();
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_3 />
-      </div>
-      <div>
-        <button onClick={() => dispatch(addLike())} style={btn}>
-          좋아요
-        </button>
-        <button onClick={() => dispatch(removeLike())} style={btn}>
-          싫어요
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Right_3() {
-  return (
-    <div style={container_div_2}>
-      <div>
-        <Right_4 />
-      </div>
-    </div>
-  );
-}
-
-function Right_4() {
-  const dispatch = useDispatch();
-
-  return (
-    <div style={container_div_2}>
-      <div>
-        <button onClick={() => dispatch(onIncrease())} style={btn}>
-          값의 증가 버튼
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// css 객체
-const container_root: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  border: '5px solid black',
-  padding: 10,
-  gap: 10,
-};
-const container: React.CSSProperties = {
-  border: '5px solid red',
-  display: 'flex',
-  gap: '10px',
-};
-const container_title: React.CSSProperties = {
-  fontSize: '40px',
-  color: 'blue',
-  border: '5px solid orange',
-};
-const container_div: React.CSSProperties = {
-  border: '5px solid hotpink',
-  margin: 10,
-};
-const container_div_2: React.CSSProperties = {
-  border: '5px solid yellowgreen',
-  margin: 10,
-};
-const btn: React.CSSProperties = {
-  border: '5px solid #000',
-  padding: 10,
-  margin: 20,
-};
-```
